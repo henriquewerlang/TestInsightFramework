@@ -1,0 +1,4 @@
+[submodule "Externals/Translucent"]
+	path = Externals/Translucent
+	url = https://github.com/henriquewerlang/Translucent.git
+	branch = master
