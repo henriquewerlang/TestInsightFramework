@@ -135,6 +135,8 @@ begin
     end;
 
   FTestInsightClient.FinishedTesting;
+
+  Context.Free;
 end;
 
 { Assert }
