@@ -1,6 +1,7 @@
 ﻿program Test.Insight.Framework.Test.Project;
 
 {$STRONGLINKTYPES ON}
+
 uses
   FastMM5,
   DUnitX.MemoryLeakMonitor.FastMM5,
