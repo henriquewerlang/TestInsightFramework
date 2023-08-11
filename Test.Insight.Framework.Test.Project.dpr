@@ -14,3 +14,4 @@ uses
 begin
   TestInsight.DUnitX.RunRegisteredTests;
 end.
+
