@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, Test.Insight.Framework, DUnitX.TestFramework, TestInsight.Client;
+uses System.SysUtils, System.Generics.Collections, Test.Insight.Framework, DUnitX.TestFramework, TestInsight.Client;
 
 type
   EExpectedError = class(Exception)
@@ -38,6 +38,20 @@ type
     procedure WhenHasSelectedTestsMustRunOnlyTheSelectedTests;
     [Test]
     procedure MustExecuteOnlyTheSelectedTest;
+    [Test]
+    procedure MustCreateTheClassOnlyIfWillExecuteAnTest;
+    [Test]
+    procedure BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
+    [Test]
+    procedure AfterExecuteTheTestsOfAnClassMustCallTearDownFixtureOfTheClass;
+    [Test]
+    procedure WhenExecuteTheTestsOfAClassMustCallTheSetupProcedureForEveryTestProcedureCalled;
+    [Test]
+    procedure WhenExecuteTheTestsOfAClassMustCallTheTearDownProcedureForEveryTestProcedureCalled;
+    [Test]
+    procedure EvenTheTestGivingErrorMustCallTheTearDownProcedure;
+    [Test]
+    procedure WhenTheTestFailMustRegisterTheErrorMessageInTheResult;
   end;
 
   [TestFixture]
@@ -62,7 +76,7 @@ type
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
   private
     FCalledProcedures: String;
-    FPostedTests: TArray<TTestInsightResult>;
+    FPostedTests: TDictionary<String, TTestInsightResult>;
     FTests: TArray<String>;
 
     function GetHasError: Boolean;
@@ -77,8 +91,12 @@ type
     procedure SetOptions(const value: TTestInsightOptions);
     procedure StartedTesting(const totalCount: Integer);
   public
+    constructor Create;
+
+    destructor Destroy; override;
+
     property CalledProcedures: String read FCalledProcedures write FCalledProcedures;
-    property PostedTests: TArray<TTestInsightResult> read FPostedTests write FPostedTests;
+    property PostedTests:  TDictionary<String, TTestInsightResult> read FPostedTests;
     property Tests: TArray<String> read FTests write FTests;
   end;
 
@@ -173,6 +191,20 @@ end;
 
 { TTestInsightFrameworkTest }
 
+procedure TTestInsightFrameworkTest.AfterExecuteTheTestsOfAnClassMustCallTearDownFixtureOfTheClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.TearDownFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixture.TearDownFixtureCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.AfterRunTheTestsMustCallTheFinishedTesting;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -185,6 +217,45 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.SetupFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixture.SetupFixtureCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.EvenTheTestGivingErrorMustCallTheTearDownProcedure;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.TearDownCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.MustCreateTheClassOnlyIfWillExecuteAnTest;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TMyClassTest3.Test2'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  Assert.AreEqual(0, TClassWithoutTest.CreationCount);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.MustExecuteOnlyTheSelectedTest;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -193,7 +264,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual('MyClassTest.TMyClassTest3.Test2', Format('%s.%s', [Client.PostedTests[1].Path, Client.PostedTests[1].TestName]));
+  Assert.IsTrue(Client.PostedTests.ContainsKey('MyClassTest.TMyClassTest3.Test2'));
 
   Test.Free;
 end;
@@ -205,7 +276,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual<NativeInt>(12, Length(Client.PostedTests));
+  Assert.AreEqual(9, Client.PostedTests.Count);
 
   Test.Free;
 end;
@@ -220,7 +291,7 @@ begin
 
   WaitForTest := False;
 
-  var TestResult := Client.PostedTests[7];
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest2.Test2'];
 
   Assert.IsTrue(TestResult.Duration >= 500);
 
@@ -234,9 +305,9 @@ begin
 
   Test.Run;
 
-  var TestResult := Client.PostedTests[0];
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test'];
 
-  Assert.AreEqual(TResultType.Running, TestResult.ResultType);
+  Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
   Assert.AreEqual('MyClassTest', TestResult.UnitName);
   Assert.AreEqual('TMyClassTest', TestResult.ClassName);
   Assert.AreEqual('Test', TestResult.MethodName);
@@ -252,7 +323,7 @@ begin
 
   Test.Run;
 
-  var TestResult := Client.PostedTests[3];
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test2'];
 
   Assert.AreEqual(TResultType.Failed, TestResult.ResultType);
 
@@ -266,10 +337,38 @@ begin
 
   Test.Run;
 
-  var TestResult := Client.PostedTests[5];
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest2.Test'];
 
   Assert.AreEqual(TResultType.Error, TestResult.ResultType);
   Assert.AreEqual('An error!', TestResult.ExceptionMessage);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheSetupProcedureForEveryTestProcedureCalled;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.SetupCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.SetupCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheTearDownProcedureForEveryTestProcedureCalled;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.TearDownCalled);
 
   Test.Free;
 end;
@@ -282,7 +381,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual<NativeInt>(2, Length(Client.PostedTests));
+  Assert.AreEqual<NativeInt>(1, Client.PostedTests.Count);
 
   Test.Free;
 end;
@@ -299,6 +398,20 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenTheTestFailMustRegisterTheErrorMessageInTheResult;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  Test.Run;
+
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test2'];
+
+  Assert.AreEqual('The value expected is 10 and the current value is 20', TestResult.ExceptionMessage);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenTheTestIsExecutedMustPostTheResultHasSuccess;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -306,7 +419,7 @@ begin
 
   Test.Run;
 
-  var TestResult := Client.PostedTests[1];
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test'];
 
   Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
 
@@ -318,6 +431,20 @@ end;
 procedure TTestInsightClientMock.ClearTests;
 begin
   RegisterProcedureCall('ClearTests');
+end;
+
+constructor TTestInsightClientMock.Create;
+begin
+  inherited;
+
+  FPostedTests := TDictionary<String, TTestInsightResult>.Create;
+end;
+
+destructor TTestInsightClientMock.Destroy;
+begin
+  FPostedTests.Free;
+
+  inherited;
 end;
 
 procedure TTestInsightClientMock.FinishedTesting;
@@ -346,19 +473,15 @@ end;
 
 procedure TTestInsightClientMock.PostResult(const testResult: TTestInsightResult; sendImmediately: Boolean);
 begin
-  FPostedTests := FPostedTests + [testResult];
+  FPostedTests.AddOrSetValue(Format('%s.%s', [testResult.Path, testResult.TestName]), testResult);
 
   RegisterProcedureCall(Format('PostResult.%s', [BoolToStr(sendImmediately, True)]));
 end;
 
 procedure TTestInsightClientMock.PostResults(const testResults: array of TTestInsightResult; sendImmediately: Boolean);
 begin
-  SetLength(FPostedTests, Length(testResults));
-
-  for var A := Low(testResults) to High(testResults) do
-    FPostedTests[A] := testResults[A];
-
-  RegisterProcedureCall(Format('PostResults.%d.%s', [Length(testResults), BoolToStr(sendImmediately)]));
+  for var Test in testResults do
+    PostResult(Test, sendImmediately);
 end;
 
 procedure TTestInsightClientMock.RegisterProcedureCall(const ProcedureName: String);

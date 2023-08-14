@@ -5,6 +5,10 @@ interface
 uses System.SysUtils, TestInsight.Client;
 
 type
+  SetupAttribute = class(TCustomAttribute);
+  SetupFixtureAttribute = class(TCustomAttribute);
+  TearDownAttribute = class(TCustomAttribute);
+  TearDownFixtureAttribute = class(TCustomAttribute);
   TestAttribute = class(TCustomAttribute);
   TestFixtureAttribute = class(TCustomAttribute);
 
@@ -24,7 +28,8 @@ type
 
   Assert = class
   public
-    class procedure AreEqual<T>(const Expected, CurrentValue: T);
+    class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
+    class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
     class procedure WillNotRaise(const Proc: TProc);
     class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
   end;
@@ -232,8 +237,6 @@ procedure TTestInsightFramework.Run;
 var
   Context: TRttiContext;
 
-  ConstructorMethod: TRttiMethod;
-
   TestResult: TTestInsightResult;
 
   Instance: TObject;
@@ -253,20 +256,82 @@ var
     FTestInsightClient.PostResult(TestResult, True);
   end;
 
+  procedure PostError(const Result: TResultType; const Message: String);
+  begin
+    TestResult.ExceptionMessage := Message;
+
+    PostResult(Result);
+  end;
+
   function CanExecuteTest: Boolean;
+  var
+    CurrentTestName, TestName: String;
+
   begin
     Result := Length(SelectedTests) = 0;
 
     if not Result then
     begin
-      var CurrentTestName := Format('%s.%s', [AType.QualifiedName, AMethod.Name]);
+      CurrentTestName := Format('%s.%s', [AType.QualifiedName, AMethod.Name]);
 
-      for var TestName in SelectedTests do
+      for TestName in SelectedTests do
         if CurrentTestName = TestName then
           Result := True;
     end;
 
     Result := Result and AMethod.HasAttribute<TestAttribute>;
+  end;
+
+  function GetConstructoMethod: TRttiMethod;
+  var
+    AMethod: TRttiMethod;
+
+  begin
+    Result := nil;
+
+    for AMethod in AType.GetMethods do
+      if AMethod.IsConstructor and (AMethod.GetParameters = nil) then
+        Exit(AMethod);
+  end;
+
+  procedure CallProcedureWithAttribute(const AttributeClass: TCustomAttributeClass);
+  var
+    AMethod: TRttiMethod;
+
+  begin
+    for AMethod in AType.GetMethods do
+      if AMethod.HasAttribute(AttributeClass) then
+        AMethod.Invoke(Instance, []);
+  end;
+
+  procedure CallSetup;
+  begin
+    CallProcedureWithAttribute(SetupAttribute);
+  end;
+
+  procedure CallSetupFixture;
+  begin
+    CallProcedureWithAttribute(SetupFixtureAttribute);
+  end;
+
+  procedure CallTearDownFixture;
+  begin
+    CallProcedureWithAttribute(TearDownFixtureAttribute);
+  end;
+
+  procedure CallTearDown;
+  begin
+    CallProcedureWithAttribute(TearDownAttribute);
+  end;
+
+  procedure CheckInstance;
+  begin
+    if not Assigned(Instance) then
+    begin
+      Instance := GetConstructoMethod.Invoke(AType.AsInstance.MetaclassType, []).AsObject;
+
+      CallSetupFixture;
+    end;
   end;
 
 begin
@@ -283,17 +348,7 @@ begin
   for AType in Context.GetTypes do
     if AType.IsInstance and AType.HasAttribute<TestFixtureAttribute> then
     begin
-      ConstructorMethod := nil;
-
-      for AMethod in AType.GetMethods do
-        if AMethod.IsConstructor and (AMethod.GetParameters = nil) then
-        begin
-          ConstructorMethod := AMethod;
-
-          Break;
-        end;
-
-      Instance := ConstructorMethod.Invoke(AType.AsInstance.MetaclassType, []).AsObject;
+      Instance := nil;
 
       for AMethod in AType.GetMethods do
         if CanExecuteTest then
@@ -310,23 +365,30 @@ begin
           PostResult(TResultType.Running);
 
           try
-            AMethod.Invoke(Instance, []);
+            CheckInstance;
 
-            TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+            CallSetup;
 
-            PostResult(TResultType.Passed);
+            try
+              AMethod.Invoke(Instance, []);
+
+              TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+
+              PostResult(TResultType.Passed);
+            finally
+              CallTearDown;
+            end;
           except
             on TestFail: EAssertFail do
-              PostResult(TResultType.Failed);
+              PostError(TResultType.Failed, TestFail.Message);
 
             on Error: Exception do
-            begin
-              TestResult.ExceptionMessage := Error.Message;
-
-              PostResult(TResultType.Error);
-            end;
+              PostError(TResultType.Error, Error.Message);
           end;
         end;
+
+      if Assigned(Instance) then
+        CallTearDownFixture;
 
       Instance.Free;
     end;
@@ -337,6 +399,12 @@ begin
 end;
 
 { Assert }
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: String);
+begin
+  if Expected <> CurrentValue then
+    raise EAssertFail.CreateFmt('The value expected is %s and the current value is %s', [Expected, CurrentValue]);
+end;
 
 class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T);
 begin
