@@ -52,6 +52,14 @@ type
     procedure EvenTheTestGivingErrorMustCallTheTearDownProcedure;
     [Test]
     procedure WhenTheTestFailMustRegisterTheErrorMessageInTheResult;
+    [Test]
+    procedure WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
+    [Test]
+    procedure WhenAClassInheritesTheSetupFunctionMustCallOnlyOneByTest;
+    [Test]
+    procedure WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
+    [Test]
+    procedure WhenAClassInheritesTheTearDownFunctionMustCallOnlyOneByTest;
   end;
 
   [TestFixture]
@@ -71,6 +79,10 @@ type
     procedure WheWillNotRaiseIsCalledMustExecuteTheInternalProcedure;
     [Test]
     procedure WhenAnExceptionIsRaisedInsideTheWillNotRaiseAssertMustRaiseAnAssertionError;
+    [Test]
+    procedure WhenCheckAnExpectationAndIsntEmptyMustRaiseAssertError;
+    [Test]
+    procedure WhenCheckAnEmptyExpectationCantRaiseAnyError;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -130,6 +142,24 @@ begin
     end, EExpectedError);
 
   Assert.IsTrue(Executed);
+end;
+
+procedure TAssertTest.WhenCheckAnEmptyExpectationCantRaiseAnyError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.CheckExpectation(EmptyStr);
+    end);
+end;
+
+procedure TAssertTest.WhenCheckAnExpectationAndIsntEmptyMustRaiseAssertError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.CheckExpectation('The expectation error!');
+    end, EAssertFail);
 end;
 
 procedure TAssertTest.WhenRaiseAnExceptionNoExpectedTheWillRaiseMustRaiseAnAssertError;
@@ -194,6 +224,7 @@ end;
 procedure TTestInsightFrameworkTest.AfterExecuteTheTestsOfAnClassMustCallTearDownFixtureOfTheClass;
 begin
   var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassWithSetupAndTearDownFixture.Test', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test2', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test3'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownFixtureCalled := 0;
@@ -220,6 +251,7 @@ end;
 procedure TTestInsightFrameworkTest.BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
 begin
   var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassWithSetupAndTearDownFixture.Test', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test2', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test3'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.SetupFixtureCalled := 0;
@@ -234,6 +266,7 @@ end;
 procedure TTestInsightFrameworkTest.EvenTheTestGivingErrorMustCallTheTearDownProcedure;
 begin
   var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassWithSetupAndTearDownFixture.Test', 'MyClassTest.TClassInheritedFromAnotherClass.Test2', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test3'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
@@ -276,7 +309,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual(9, Client.PostedTests.Count);
+  Assert.AreEqual(15, Client.PostedTests.Count);
 
   Test.Free;
 end;
@@ -316,6 +349,66 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromAnotherClass.Test11', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test12', 'MyClassTest.TClassInheritedFromAnotherClass.Test13'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.SetupFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupFixtureCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallOnlyOneByTest;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromAnotherClass.Test11', 'MyClassTest.TClassInheritedFromAnotherClass.Test12', 'MyClassTest.TClassInheritedFromAnotherClass.Test13'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.SetupCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(3, TClassInheritedFromAnotherClass.SetupCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromAnotherClass.Test11', 'MyClassTest.TClassInheritedFromAnotherClass.Test12', 'MyClassTest.TClassInheritedFromAnotherClass.Test13'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownFixtureCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCallOnlyOneByTest;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromAnotherClass.Test11', 'MyClassTest.TClassInheritedFromAnotherClass.Test12', 'MyClassTest.TClassInheritedFromAnotherClass.Test13'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.TearDownCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(3, TClassInheritedFromAnotherClass.TearDownCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenATestFailMustPostTheResultError;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -348,6 +441,7 @@ end;
 procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheSetupProcedureForEveryTestProcedureCalled;
 begin
   var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassWithSetupAndTearDownFixture.Test', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test2', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test3'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.SetupCalled := 0;
@@ -362,6 +456,7 @@ end;
 procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheTearDownProcedureForEveryTestProcedureCalled;
 begin
   var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassWithSetupAndTearDownFixture.Test', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test2', 'MyClassTest.TClassWithSetupAndTearDownFixture.Test3'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownCalled := 0;

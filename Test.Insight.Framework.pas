@@ -30,6 +30,7 @@ type
   public
     class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
+    class procedure CheckExpectation(const Expectation: String);
     class procedure WillNotRaise(const Proc: TProc);
     class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
   end;
@@ -299,7 +300,7 @@ var
     AMethod: TRttiMethod;
 
   begin
-    for AMethod in AType.GetMethods do
+    for AMethod in AType.GetDeclaredMethods do
       if AMethod.HasAttribute(AttributeClass) then
         AMethod.Invoke(Instance, []);
   end;
@@ -410,6 +411,12 @@ class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T);
 begin
   if Expected <> CurrentValue then
     raise EAssertFail.CreateFmt('The value expected is %s and the current value is %s', [TValue.From<T>(Expected).ToString, TValue.From<T>(CurrentValue).ToString]);
+end;
+
+class procedure Assert.CheckExpectation(const Expectation: String);
+begin
+  if not Expectation.IsEmpty then
+    raise EAssertFail.CreateFmt('Expectation not achieved [%s]', [Expectation]);
 end;
 
 class procedure Assert.WillNotRaise(const Proc: TProc);

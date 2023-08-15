@@ -64,6 +64,25 @@ type
     procedure Test3;
   end;
 
+  [TestFixture]
+  TClassInheritedFromAnotherClass = class(TClassWithSetupAndTearDownFixture)
+  public
+    [SetupFixture]
+    procedure SetupFixture;
+    [TearDownFixture]
+    procedure TearDownFixture;
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure Test11;
+    [Test]
+    procedure Test12;
+    [Test]
+    procedure Test13;
+  end;
+
 var
   WaitForTest: Boolean = False;
 
@@ -152,6 +171,43 @@ end;
 procedure TClassWithSetupAndTearDownFixture.Test3;
 begin
   raise Exception.Create('Any error!');
+end;
+
+{ TClassInheritedFromAnotherClass }
+
+procedure TClassInheritedFromAnotherClass.Setup;
+begin
+  Inc(SetupCalled);
+end;
+
+procedure TClassInheritedFromAnotherClass.SetupFixture;
+begin
+  Inc(SetupFixtureCalled);
+end;
+
+procedure TClassInheritedFromAnotherClass.TearDown;
+begin
+  Inc(TearDownCalled);
+end;
+
+procedure TClassInheritedFromAnotherClass.TearDownFixture;
+begin
+  Inc(TearDownFixtureCalled);
+end;
+
+procedure TClassInheritedFromAnotherClass.Test11;
+begin
+
+end;
+
+procedure TClassInheritedFromAnotherClass.Test12;
+begin
+
+end;
+
+procedure TClassInheritedFromAnotherClass.Test13;
+begin
+
 end;
 
 end.
