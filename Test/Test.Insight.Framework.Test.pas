@@ -60,6 +60,14 @@ type
     procedure WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
     [Test]
     procedure WhenAClassInheritesTheTearDownFunctionMustCallOnlyOneByTest;
+    [Test]
+    procedure WhenAClassInheritesTheSetupFixtureMustCallTheProcedureFromInheritedClass;
+    [Test]
+    procedure WhenAClassInheritesTheSetupFunctionMustCallTheProcedureFromInheritedClass;
+    [Test]
+    procedure WhenAClassInheritesTheTearDownFixtureMustCallTheProcedureFromInheritedClass;
+    [Test]
+    procedure WhenAClassInheritesTheTearDownFunctionMustCallTheProcedureFromInheritedClass;
   end;
 
   [TestFixture]
@@ -309,7 +317,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual(15, Client.PostedTests.Count);
+  Assert.AreEqual(19, Client.PostedTests.Count);
 
   Test.Free;
 end;
@@ -364,6 +372,21 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallTheProcedureFromInheritedClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.SetupFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupFixtureCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallOnlyOneByTest;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -379,10 +402,40 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallTheProcedureFromInheritedClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.SetupCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
 begin
   var Client := TTestInsightClientMock.Create;
   Client.Tests := ['MyClassTest.TClassInheritedFromAnotherClass.Test11', 'MyClassTest.TClassInheritedFromAnotherClass.Test12', 'MyClassTest.TClassInheritedFromAnotherClass.Test13'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownFixtureCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallTheProcedureFromInheritedClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
   var Test := TTestInsightFramework.Create(Client);
 
   TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
@@ -405,6 +458,21 @@ begin
   Test.Run;
 
   Assert.AreEqual(3, TClassInheritedFromAnotherClass.TearDownCalled);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCallTheProcedureFromInheritedClass;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassInheritedFromAnotherClass.TearDownCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownCalled);
 
   Test.Free;
 end;

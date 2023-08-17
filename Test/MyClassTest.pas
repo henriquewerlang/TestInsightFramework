@@ -83,6 +83,13 @@ type
     procedure Test13;
   end;
 
+  [TestFixture]
+  TClassInheritedFromWithoutSetupAndTearDown = class(TClassWithSetupAndTearDownFixture)
+  public
+    [Test]
+    procedure Test11;
+  end;
+
 var
   WaitForTest: Boolean = False;
 
@@ -206,6 +213,13 @@ begin
 end;
 
 procedure TClassInheritedFromAnotherClass.Test13;
+begin
+
+end;
+
+{ TClassInheritedFromWithoutSetupAndTearDown }
+
+procedure TClassInheritedFromWithoutSetupAndTearDown.Test11;
 begin
 
 end;
