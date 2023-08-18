@@ -281,8 +281,6 @@ var
         if CurrentTestName = TestName then
           Result := True;
     end;
-
-    Result := Result and AMethod.HasAttribute<TestAttribute>;
   end;
 
   function GetConstructoMethod: TRttiMethod;
@@ -358,10 +356,9 @@ begin
       Instance := nil;
 
       for AMethod in AType.GetMethods do
-        if CanExecuteTest then
+        if AMethod.HasAttribute<TestAttribute> then
         begin
-          StartedTime := Now;
-          TestResult := TTestInsightResult.Create(TResultType.Running, AMethod.Name, AType.AsInstance.DeclaringUnitName);
+          TestResult := TTestInsightResult.Create(TResultType.Skipped, AMethod.Name, AType.AsInstance.DeclaringUnitName);
           TestResult.ClassName := AType.Name;
           TestResult.Duration := 0;
           TestResult.ExceptionMessage := EmptyStr;
@@ -369,28 +366,35 @@ begin
           TestResult.Path := AType.QualifiedName;
           TestResult.UnitName := AType.AsInstance.DeclaringUnitName;
 
-          PostResult(TResultType.Running);
+          PostResult(TResultType.Skipped);
 
-          try
-            CheckInstance;
+          if CanExecuteTest then
+          begin
+            StartedTime := Now;
 
-            CallSetup;
+            PostResult(TResultType.Running);
 
             try
-              AMethod.Invoke(Instance, []);
+              CheckInstance;
 
-              TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+              CallSetup;
 
-              PostResult(TResultType.Passed);
-            finally
-              CallTearDown;
+              try
+                AMethod.Invoke(Instance, []);
+
+                TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+
+                PostResult(TResultType.Passed);
+              finally
+                CallTearDown;
+              end;
+            except
+              on TestFail: EAssertFail do
+                PostError(TResultType.Failed, TestFail.Message);
+
+              on Error: Exception do
+                PostError(TResultType.Error, Error.Message);
             end;
-          except
-            on TestFail: EAssertFail do
-              PostError(TResultType.Failed, TestFail.Message);
-
-            on Error: Exception do
-              PostError(TResultType.Error, Error.Message);
           end;
         end;
 

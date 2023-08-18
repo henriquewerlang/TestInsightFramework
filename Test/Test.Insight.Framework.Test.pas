@@ -68,6 +68,8 @@ type
     procedure WhenAClassInheritesTheTearDownFixtureMustCallTheProcedureFromInheritedClass;
     [Test]
     procedure WhenAClassInheritesTheTearDownFunctionMustCallTheProcedureFromInheritedClass;
+    [Test]
+    procedure WhenTheTestIsntExecutedMustRegisterTheTestAsSkiped;
   end;
 
   [TestFixture]
@@ -544,7 +546,9 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual<NativeInt>(1, Client.PostedTests.Count);
+  for var TheTest in Client.PostedTests.Values do
+    if TheTest.ResultType = TResultType.Passed then
+      Assert.AreEqual('MyClassTest.TMyClassTest3.Test2', TheTest.Path + '.' + TheTest.TestName);
 
   Test.Free;
 end;
@@ -585,6 +589,23 @@ begin
   var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test'];
 
   Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheTestIsntExecutedMustRegisterTheTestAsSkiped;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TMyClassTest.Test'];
+  var Test := TTestInsightFramework.Create(Client);
+
+  Test.Run;
+
+  Assert.IsTrue(Client.PostedTests.ContainsKey('MyClassTest.TMyClassTest.Test2'));
+
+  var TestResult := Client.PostedTests['MyClassTest.TMyClassTest.Test2'];
+
+  Assert.AreEqual(TResultType.Skipped, TestResult.ResultType);
 
   Test.Free;
 end;
