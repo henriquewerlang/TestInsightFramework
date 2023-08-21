@@ -31,6 +31,7 @@ type
     class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
     class procedure IsFalse(const Value: Boolean);
+    class procedure IsNotNil(const Value: Pointer);
     class procedure IsTrue(const Value: Boolean);
     class procedure CheckExpectation(const Expectation: String);
     class procedure WillNotRaise(const Proc: TProc);
@@ -431,12 +432,20 @@ end;
 
 class procedure Assert.IsFalse(const Value: Boolean);
 begin
+  if Value then
+    raise EAssertFail.Create('A FALSE value is expected!');
+end;
 
+class procedure Assert.IsNotNil(const Value: Pointer);
+begin
+  if not Assigned(Value) then
+    raise EAssertFail.Create('Not nil pointer expected!');
 end;
 
 class procedure Assert.IsTrue(const Value: Boolean);
 begin
-
+  if not Value then
+    raise EAssertFail.Create('A TRUE value is expected!');
 end;
 
 class procedure Assert.WillNotRaise(const Proc: TProc);

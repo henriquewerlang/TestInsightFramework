@@ -93,6 +93,18 @@ type
     procedure WhenCheckAnExpectationAndIsntEmptyMustRaiseAssertError;
     [Test]
     procedure WhenCheckAnEmptyExpectationCantRaiseAnyError;
+    [Test]
+    procedure ThenChekAndPointerMustRaiseAssertionErrorIfIsNilValue;
+    [Test]
+    procedure WhenThePointerIsntNilCantRaiseAnyError;
+    [Test]
+    procedure WhenATrueValueIsExpectedAndAFalseValueIsPasseMustRaiseAssertionError;
+    [Test]
+    procedure WhenATrueValueIsExpectedAndATrueValueIsPassedCantRaiseAnyError;
+    [Test]
+    procedure WhenAFalseValueIsExpectedAndATrueValueIsPassedMustRaiseAssertionError;
+    [Test]
+    procedure WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -128,6 +140,33 @@ uses MyClassTest;
 
 { TAssertTest }
 
+procedure TAssertTest.ThenChekAndPointerMustRaiseAssertionErrorIfIsNilValue;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsNotNil(nil);
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsFalse(False);
+    end);
+end;
+
+procedure TAssertTest.WhenAFalseValueIsExpectedAndATrueValueIsPassedMustRaiseAssertionError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsFalse(True);
+    end, EAssertFail);
+end;
+
 procedure TAssertTest.WhenAnExceptionIsRaisedInsideTheWillNotRaiseAssertMustRaiseAnAssertionError;
 begin
   Assert.WillRaise(
@@ -139,6 +178,24 @@ begin
           raise EExpectedError.Create;
         end);
     end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenATrueValueIsExpectedAndAFalseValueIsPasseMustRaiseAssertionError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsTrue(False);
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenATrueValueIsExpectedAndATrueValueIsPassedCantRaiseAnyError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsTrue(True);
+    end);
 end;
 
 procedure TAssertTest.WhenCallTheAssertWillRaiseMustCallTheInternalProcedurePassedInTheParameter;
@@ -196,6 +253,19 @@ begin
           raise EExpectedError.Create;
         end, EExpectedError);
     end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenThePointerIsntNilCantRaiseAnyError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      var AObject := TObject.Create;
+
+      Test.Insight.Framework.Assert.IsNotNil(AObject);
+
+      AObject.Free;
+    end);
 end;
 
 procedure TAssertTest.WhenTheValueAreEqualCantRaiseAnyError;
