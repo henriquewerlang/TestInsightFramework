@@ -70,6 +70,8 @@ type
     procedure WhenAClassInheritesTheTearDownFunctionMustCallTheProcedureFromInheritedClass;
     [Test]
     procedure WhenTheTestIsntExecutedMustRegisterTheTestAsSkiped;
+    [Test]
+    procedure WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
   end;
 
   [TestFixture]
@@ -136,7 +138,7 @@ type
 
 implementation
 
-uses MyClassTest;
+uses System.Rtti, MyClassTest;
 
 { TAssertTest }
 
@@ -631,6 +633,25 @@ begin
   Test.Run;
 
   Assert.StartsWith('StartedTesting;', Client.CalledProcedures);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.Tests := ['MyClassTest.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  var FunctionExecuted := False;
+  var Test := TTestInsightFramework.Create(Client);
+
+  Test.Run(
+    function (&Type: TRttiInstanceType): TObject
+    begin
+      FunctionExecuted := True;
+      Result := TClassInheritedFromWithoutSetupAndTearDown.Create;
+    end);
+
+  Assert.IsTrue(FunctionExecuted);
 
   Test.Free;
 end;

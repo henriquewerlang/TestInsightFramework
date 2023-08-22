@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, TestInsight.Client;
+uses System.SysUtils, System.Rtti, TestInsight.Client;
 
 type
   SetupAttribute = class(TCustomAttribute);
@@ -18,12 +18,16 @@ type
   TTestInsightFramework = class
   private
     FTestInsightClient: ITestInsightClient;
+
+    function CreateObject(&Type: TRttiInstanceType): TObject;
   public
     constructor Create(const TestInsightClient: ITestInsightClient);
 
-    procedure Run;
+    procedure Run; overload;
+    procedure Run(ObjectResolver: TFunc<TRttiInstanceType, TObject>); overload;
 
-    class procedure ExecuteTests;
+    class procedure ExecuteTests; overload;
+    class procedure ExecuteTests(const ObjectResolver: TFunc<TRttiInstanceType, TObject>); overload;
   end;
 
   Assert = class
@@ -65,7 +69,7 @@ type
 
 implementation
 
-uses System.Rtti, System.DateUtils{$IFDEF PAS2JS}, Web, JS{$ENDIF};
+uses System.DateUtils{$IFDEF PAS2JS}, Web, JS{$ENDIF};
 
 {$IFDEF PAS2JS}
 
@@ -225,19 +229,41 @@ begin
   FTestInsightClient := TestInsightClient;
 end;
 
-class procedure TTestInsightFramework.ExecuteTests;
+function TTestInsightFramework.CreateObject(&Type: TRttiInstanceType): TObject;
+var
+  Method: TRttiMethod;
+
+begin
+  Result := nil;
+
+  for Method in &Type.GetMethods do
+    if Method.IsConstructor and (Method.GetParameters = nil) then
+      Exit(Method.Invoke(&Type.AsInstance.MetaclassType, []).AsObject);
+end;
+
+class procedure TTestInsightFramework.ExecuteTests(const ObjectResolver: TFunc<TRttiInstanceType, TObject>);
 var
   TestFramework: TTestInsightFramework;
 
 begin
   TestFramework := TTestInsightFramework.Create(TTestInsightRestClient.Create);
 
-  TestFramework.Run;
+  TestFramework.Run(ObjectResolver);
 
   TestFramework.Free;
 end;
 
 procedure TTestInsightFramework.Run;
+begin
+  Run(nil);
+end;
+
+class procedure TTestInsightFramework.ExecuteTests;
+begin
+  ExecuteTests(nil);
+end;
+
+procedure TTestInsightFramework.Run(ObjectResolver: TFunc<TRttiInstanceType, TObject>);
 var
   Context: TRttiContext;
 
@@ -284,18 +310,6 @@ var
     end;
   end;
 
-  function GetConstructoMethod: TRttiMethod;
-  var
-    AMethod: TRttiMethod;
-
-  begin
-    Result := nil;
-
-    for AMethod in AType.GetMethods do
-      if AMethod.IsConstructor and (AMethod.GetParameters = nil) then
-        Exit(AMethod);
-  end;
-
   procedure CallProcedureWithAttribute(const AttributeClass: TCustomAttributeClass);
   var
     AMethod: TRttiMethod;
@@ -334,7 +348,7 @@ var
   begin
     if not Assigned(Instance) then
     begin
-      Instance := GetConstructoMethod.Invoke(AType.AsInstance.MetaclassType, []).AsObject;
+      Instance := ObjectResolver(AType.AsInstance);
 
       CallSetupFixture;
     end;
@@ -346,6 +360,9 @@ begin
 {$IFDEF DCC}
   FillChar(TestResult, SizeOf(TestResult), 0);
 {$ENDIF}
+
+  if not Assigned(ObjectResolver) then
+    ObjectResolver := CreateObject;
 
   FTestInsightClient.StartedTesting(0);
 
