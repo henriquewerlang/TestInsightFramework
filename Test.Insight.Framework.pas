@@ -34,10 +34,11 @@ type
   public
     class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
+    class procedure CheckExpectation(const Expectation: String);
     class procedure IsFalse(const Value: Boolean);
     class procedure IsNotNil(const Value: Pointer);
     class procedure IsTrue(const Value: Boolean);
-    class procedure CheckExpectation(const Expectation: String);
+    class procedure StartWith(const Expected, Value: String);
     class procedure WillNotRaise(const Proc: TProc);
     class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
   end;
@@ -463,6 +464,12 @@ class procedure Assert.IsTrue(const Value: Boolean);
 begin
   if not Value then
     raise EAssertFail.Create('A TRUE value is expected!');
+end;
+
+class procedure Assert.StartWith(const Expected, Value: String);
+begin
+  if not Value.StartsWith(Expected) then
+    raise EAssertFail.CreateFmt('Expected start with "%s" but started with "%s"', [Expected, Value]);
 end;
 
 class procedure Assert.WillNotRaise(const Proc: TProc);

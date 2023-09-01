@@ -1,4 +1,4 @@
-﻿unit MyClassTest;
+﻿unit Test.Insight.Framework.Classes.Test;
 
 interface
 

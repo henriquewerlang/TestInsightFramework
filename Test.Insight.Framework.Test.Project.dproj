@@ -160,7 +160,7 @@
         </DelphiCompile>
         <DCCReference Include="Test.Insight.Framework.pas"/>
         <DCCReference Include="Test\Test.Insight.Framework.Test.pas"/>
-        <DCCReference Include="Test\MyClassTest.pas"/>
+        <DCCReference Include="Test\Test.Insight.Framework.Classes.Test.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
