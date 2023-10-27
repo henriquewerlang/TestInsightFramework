@@ -267,19 +267,13 @@ end;
 
 procedure TTestInsightFramework.Run(ObjectResolver: TFunc<TRttiInstanceType, TObject>);
 var
-  Context: TRttiContext;
-
-  TestResult: TTestInsightResult;
-
-  Instance: TObject;
-
-  StartedTime: TDateTime;
-
-  AType: TRttiType;
-
   AMethod: TRttiMethod;
-
+  AType: TRttiType;
+  Context: TRttiContext;
+  Instance: TObject;
   SelectedTests: TArray<String>;
+  StartedTime: TDateTime;
+  TestResult: TTestInsightResult;
 
   procedure PostResult(const Result: TResultType);
   begin
