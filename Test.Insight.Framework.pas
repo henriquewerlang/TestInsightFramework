@@ -370,53 +370,58 @@ begin
     begin
       Instance := nil;
 
-      for AMethod in AType.GetMethods do
-        if AMethod.HasAttribute<TestAttribute> then
-        begin
-          TestResult := TTestInsightResult.Create(TResultType.Skipped, AMethod.Name, AType.AsInstance.DeclaringUnitName);
-          TestResult.ClassName := AType.Name;
-          TestResult.Duration := 0;
-          TestResult.ExceptionMessage := EmptyStr;
-          TestResult.MethodName := AMethod.Name;
-          TestResult.Path := AType.QualifiedName;
-          TestResult.UnitName := AType.AsInstance.DeclaringUnitName;
-
-          PostResult(TResultType.Skipped);
-
-          if ExecuteTests and CanExecuteTest then
+      try
+        for AMethod in AType.GetMethods do
+          if AMethod.HasAttribute<TestAttribute> then
           begin
-            StartedTime := Now;
+            TestResult := TTestInsightResult.Create(TResultType.Skipped, AMethod.Name, AType.AsInstance.DeclaringUnitName);
+            TestResult.ClassName := AType.Name;
+            TestResult.Duration := 0;
+            TestResult.ExceptionMessage := EmptyStr;
+            TestResult.MethodName := AMethod.Name;
+            TestResult.Path := AType.QualifiedName;
+            TestResult.UnitName := AType.AsInstance.DeclaringUnitName;
 
-            PostResult(TResultType.Running);
+            PostResult(TResultType.Skipped);
 
-            try
+            if ExecuteTests and CanExecuteTest then
+            begin
+              StartedTime := Now;
+
+              PostResult(TResultType.Running);
+
               CheckInstance;
 
-              CallSetup;
-
               try
-                AMethod.Invoke(Instance, []);
+                CallSetup;
 
-                TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+                try
+                  AMethod.Invoke(Instance, []);
 
-                PostResult(TResultType.Passed);
-              finally
-                CallTearDown;
+                  TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+
+                  PostResult(TResultType.Passed);
+                finally
+                  CallTearDown;
+                end;
+              except
+                on TestFail: EAssertFail do
+                  PostError(TResultType.Failed, TestFail.Message);
+
+                on Error: Exception do
+                  PostError(TResultType.Error, Error.Message);
               end;
-            except
-              on TestFail: EAssertFail do
-                PostError(TResultType.Failed, TestFail.Message);
-
-              on Error: Exception do
-                PostError(TResultType.Error, Error.Message);
             end;
           end;
+
+          if Assigned(Instance) then
+            CallTearDownFixture;
+
+          Instance.Free;
+        except
+          on Error: Exception do
+            PostError(TResultType.Error, Error.Message);
         end;
-
-      if Assigned(Instance) then
-        CallTearDownFixture;
-
-      Instance.Free;
     end;
 
   FTestInsightClient.FinishedTesting;

@@ -6,6 +6,20 @@ uses Test.Insight.Framework;
 
 type
   [TestFixture]
+  TClassWithSetupError = class
+  public
+    class var SetupFixtureRaiseError: Boolean;
+    class var TearDownFixtureRaiseError: Boolean;
+
+    [SetupFixture]
+    procedure SetupFixture;
+    [TearDownFixture]
+    procedure TearDownFixture;
+    [Test]
+    procedure Test;
+  end;
+
+  [TestFixture]
   TMyClassTest = class
   public
     [Test]
@@ -223,6 +237,25 @@ end;
 { TClassInheritedFromWithoutSetupAndTearDown }
 
 procedure TClassInheritedFromWithoutSetupAndTearDown.Test11;
+begin
+
+end;
+
+{ TClassWithSetupError }
+
+procedure TClassWithSetupError.SetupFixture;
+begin
+  if SetupFixtureRaiseError then
+    raise Exception.Create('SetupFixture Error!');
+end;
+
+procedure TClassWithSetupError.TearDownFixture;
+begin
+  if TearDownFixtureRaiseError then
+    raise Exception.Create('TeardownFixture Error');
+end;
+
+procedure TClassWithSetupError.Test;
 begin
 
 end;

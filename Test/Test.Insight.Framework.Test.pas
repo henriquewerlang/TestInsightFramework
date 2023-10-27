@@ -74,6 +74,10 @@ type
     procedure WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
     [Test]
     procedure WhenDiscoveringTestsCantExecuteAnyTest;
+    [Test]
+    procedure WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;
+    [Test]
+    procedure WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
   end;
 
   [TestFixture]
@@ -143,7 +147,7 @@ type
     destructor Destroy; override;
 
     property CalledProcedures: String read FCalledProcedures write FCalledProcedures;
-    property PostedTests:  TDictionary<String, TTestInsightResult> read FPostedTests;
+    property PostedTests: TDictionary<String, TTestInsightResult> read FPostedTests;
     property Tests: TArray<String> read FTests write FTests;
   end;
 
@@ -445,7 +449,7 @@ begin
 
   Test.Run;
 
-  Assert.AreEqual(19, Client.PostedTests.Count);
+  Assert.AreEqual(20, Client.PostedTests.Count);
 
   Test.Free;
 end;
@@ -732,6 +736,32 @@ begin
     end);
 
   Assert.IsTrue(FunctionExecuted);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+  TClassWithSetupError.SetupFixtureRaiseError := True;
+
+  Test.Run;
+
+  Assert.AreEqual(20, Client.PostedTests.Count);
+
+  Test.Free;
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+  TClassWithSetupError.TearDownFixtureRaiseError := True;
+
+  Test.Run;
+
+  Assert.AreEqual(20, Client.PostedTests.Count);
 
   Test.Free;
 end;
