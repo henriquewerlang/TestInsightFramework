@@ -47,6 +47,7 @@ type
     class var SetupFixtureCalled: Integer;
     class var TearDownCalled: Integer;
     class var TearDownFixtureCalled: Integer;
+    class var TestCalled: Integer;
 
     [SetupFixture]
     procedure SetupFixture;
@@ -167,16 +168,18 @@ end;
 
 procedure TClassWithSetupAndTearDownFixture.Test;
 begin
-
+  Inc(TestCalled);
 end;
 
 procedure TClassWithSetupAndTearDownFixture.Test2;
 begin
-
+  Inc(TestCalled);
 end;
 
 procedure TClassWithSetupAndTearDownFixture.Test3;
 begin
+  Inc(TestCalled);
+
   raise Exception.Create('Any error!');
 end;
 

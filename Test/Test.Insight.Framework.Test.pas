@@ -72,6 +72,8 @@ type
     procedure WhenTheTestIsntExecutedMustRegisterTheTestAsSkiped;
     [Test]
     procedure WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
+    [Test]
+    procedure WhenDiscoveringTestsCantExecuteAnyTest;
   end;
 
   [TestFixture]
@@ -120,6 +122,7 @@ type
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
   private
     FCalledProcedures: String;
+    FOptions: TTestInsightOptions;
     FPostedTests: TDictionary<String, TTestInsightResult>;
     FTests: TArray<String>;
 
@@ -635,6 +638,26 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenDiscoveringTestsCantExecuteAnyTest;
+begin
+  var Client := TTestInsightClientMock.Create;
+  Client.FOptions.ExecuteTests := False;
+  var Test := TTestInsightFramework.Create(Client);
+
+  TClassWithSetupAndTearDownFixture.SetupCalled := 0;
+  TClassWithSetupAndTearDownFixture.SetupFixtureCalled := 0;
+  TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
+  TClassWithSetupAndTearDownFixture.TearDownFixtureCalled := 0;
+  TClassWithSetupAndTearDownFixture.TestCalled := 0;
+
+  Test.Run;
+
+  Assert.AreEqual(0, TClassWithSetupAndTearDownFixture.SetupCalled + TClassWithSetupAndTearDownFixture.SetupFixtureCalled + TClassWithSetupAndTearDownFixture.TearDownCalled
+    + TClassWithSetupAndTearDownFixture.TearDownFixtureCalled + TClassWithSetupAndTearDownFixture.TestCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheSetupProcedureForEveryTestProcedureCalled;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -769,6 +792,7 @@ constructor TTestInsightClientMock.Create;
 begin
   inherited;
 
+  FOptions.ExecuteTests := True;
   FPostedTests := TDictionary<String, TTestInsightResult>.Create;
 end;
 
@@ -793,6 +817,8 @@ end;
 
 function TTestInsightClientMock.GetOptions: TTestInsightOptions;
 begin
+  Result := FOptions;
+
   RegisterProcedureCall('GetOptions');
 end;
 

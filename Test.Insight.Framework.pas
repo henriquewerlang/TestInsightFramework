@@ -362,6 +362,7 @@ begin
 
   FTestInsightClient.StartedTesting(0);
 
+  var ExecuteTests := FTestInsightClient.Options.ExecuteTests;
   SelectedTests := FTestInsightClient.GetTests;
 
   for AType in Context.GetTypes do
@@ -382,7 +383,7 @@ begin
 
           PostResult(TResultType.Skipped);
 
-          if CanExecuteTest then
+          if ExecuteTests and CanExecuteTest then
           begin
             StartedTime := Now;
 
