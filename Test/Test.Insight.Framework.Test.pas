@@ -96,7 +96,7 @@ type
     [Test]
     procedure WhenCheckAnEmptyExpectationCantRaiseAnyError;
     [Test]
-    procedure ThenChekAndPointerMustRaiseAssertionErrorIfIsNilValue;
+    procedure WhenChekAPointerNilMustRaiseAssertErrorInIsNotNilAssertion;
     [Test]
     procedure WhenThePointerIsntNilCantRaiseAnyError;
     [Test]
@@ -111,6 +111,10 @@ type
     procedure WhenStartWithDontStartWithTheExpectedStringMustRaiseAnError;
     [Test]
     procedure WhenTheValueStartWithTheValueExpectedCantRaiseAnyError;
+    [Test]
+    procedure WhenCheckANilPointerInTheIsNilFunctionCantRaiseAssertionError;
+    [Test]
+    procedure WhenCheckAPointerWithValueInTheIsNilFunctionMustRaiseAssertionError;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -145,15 +149,6 @@ implementation
 uses System.Rtti, Test.Insight.Framework.Classes.Test;
 
 { TAssertTest }
-
-procedure TAssertTest.ThenChekAndPointerMustRaiseAssertionErrorIfIsNilValue;
-begin
-  Assert.WillRaise(
-    procedure
-    begin
-      Test.Insight.Framework.Assert.IsNotNil(nil);
-    end, EAssertFail);
-end;
 
 procedure TAssertTest.WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
 begin
@@ -232,6 +227,37 @@ begin
     procedure
     begin
       Test.Insight.Framework.Assert.CheckExpectation('The expectation error!');
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenCheckANilPointerInTheIsNilFunctionCantRaiseAssertionError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsNil(nil);
+    end);
+end;
+
+procedure TAssertTest.WhenCheckAPointerWithValueInTheIsNilFunctionMustRaiseAssertionError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      var AObject := TObject.Create;
+
+      Test.Insight.Framework.Assert.IsNil(AObject);
+
+      AObject.Free;
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenChekAPointerNilMustRaiseAssertErrorInIsNotNilAssertion;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsNotNil(nil);
     end, EAssertFail);
 end;
 

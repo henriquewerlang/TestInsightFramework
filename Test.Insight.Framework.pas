@@ -36,6 +36,7 @@ type
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
     class procedure CheckExpectation(const Expectation: String);
     class procedure IsFalse(const Value: Boolean);
+    class procedure IsNil(const Value: Pointer);
     class procedure IsNotNil(const Value: Pointer);
     class procedure IsTrue(const Value: Boolean);
     class procedure StartWith(const Expected, Value: String);
@@ -452,6 +453,12 @@ class procedure Assert.IsFalse(const Value: Boolean);
 begin
   if Value then
     raise EAssertFail.Create('A FALSE value is expected!');
+end;
+
+class procedure Assert.IsNil(const Value: Pointer);
+begin
+  if Assigned(Value) then
+    raise EAssertFail.Create('A nil pointer expected!');
 end;
 
 class procedure Assert.IsNotNil(const Value: Pointer);
