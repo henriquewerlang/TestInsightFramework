@@ -94,6 +94,8 @@ type
     [Test]
     procedure WhenTheExceptionRaiseInTheProcedureIsExpectedCantRaiseAssertError;
     [Test]
+    procedure WhenExpectAnExceptionInAssertionAndNoneHappensMustRaiseAssertError;
+    [Test]
     procedure WheWillNotRaiseIsCalledMustExecuteTheInternalProcedure;
     [Test]
     procedure WhenAnExceptionIsRaisedInsideTheWillNotRaiseAssertMustRaiseAnAssertionError;
@@ -214,6 +216,8 @@ begin
     procedure
     begin
       Executed := True;
+
+      raise EExpectedError.Create;
     end, EExpectedError);
 
   Assert.IsTrue(Executed);
@@ -265,6 +269,19 @@ begin
     procedure
     begin
       Test.Insight.Framework.Assert.IsNotNil(nil);
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenExpectAnExceptionInAssertionAndNoneHappensMustRaiseAssertError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.WillRaise(
+        procedure
+        begin
+
+        end, EExpectedError);
     end, EAssertFail);
 end;
 

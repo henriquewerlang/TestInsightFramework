@@ -481,7 +481,12 @@ end;
 
 class procedure Assert.WillNotRaise(const Proc: TProc);
 begin
-  WillRaise(Proc, nil);
+  try
+    Proc();
+  except
+    on Error: Exception do
+      raise EAssertFail.CreateFmt('Unexpected exception raised %s!', [Error.ClassName]);
+  end;
 end;
 
 class procedure Assert.WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
@@ -490,9 +495,13 @@ begin
     Proc();
   except
     on Error: Exception do
-      if not (Error is ExceptionClass) then
+      if Error is ExceptionClass then
+        Exit
+      else
         raise EAssertFail.CreateFmt('Unexpected exception raised %s!', [Error.ClassName]);
   end;
+
+  raise EAssertFail.Create('No exceptions raised!');
 end;
 
 end.
