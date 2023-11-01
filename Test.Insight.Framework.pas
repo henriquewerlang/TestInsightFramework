@@ -350,6 +350,9 @@ var
     end;
   end;
 
+var
+  ExecuteTests: Boolean;
+
 begin
   Context := TRttiContext.Create;
 
@@ -362,7 +365,7 @@ begin
 
   FTestInsightClient.StartedTesting(0);
 
-  var ExecuteTests := FTestInsightClient.Options.ExecuteTests;
+  ExecuteTests := FTestInsightClient.Options.ExecuteTests;
   SelectedTests := FTestInsightClient.GetTests;
 
   for AType in Context.GetTypes do
