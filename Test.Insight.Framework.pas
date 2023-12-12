@@ -413,6 +413,10 @@ begin
 
                 on Error: Exception do
                   PostError(TResultType.Error, Error.Message);
+{$IFDEF PAS2JS}
+                on JSErro: TJSError do
+                  PostError(TResultType.Error, JSErro.Message);
+{$ENDIF}
               end;
             end;
           end;
