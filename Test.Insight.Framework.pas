@@ -12,6 +12,15 @@ type
   TestAttribute = class(TCustomAttribute);
   TestFixtureAttribute = class(TCustomAttribute);
 
+  TestCaseAttribute = class(TestAttribute)
+  public
+    constructor Create(const TestName, Param: String); overload;
+    constructor Create(const TestName, Param1, Param2: String); overload;
+    constructor Create(const TestName, Param1, Param2, Param3: String); overload;
+    constructor Create(const TestName, Param1, Param2, Param3, Param4: String); overload;
+    constructor Create(const TestName, Param1, Param2, Param3, Param4, Param5: String); overload;
+  end;
+
   EAssertFail = class(Exception)
   end;
 
@@ -509,6 +518,33 @@ begin
   end;
 
   raise EAssertFail.Create('No exceptions raised!');
+end;
+
+{ TestCaseAttribute }
+
+constructor TestCaseAttribute.Create(const TestName, Param: String);
+begin
+
+end;
+
+constructor TestCaseAttribute.Create(const TestName, Param1, Param2: String);
+begin
+
+end;
+
+constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3: String);
+begin
+
+end;
+
+constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3, Param4: String);
+begin
+
+end;
+
+constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3, Param4, Param5: String);
+begin
+
 end;
 
 end.
