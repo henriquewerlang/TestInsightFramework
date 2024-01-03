@@ -3,8 +3,6 @@
 {$STRONGLINKTYPES ON}
 
 uses
-  FastMM5,
-  DUnitX.MemoryLeakMonitor.FastMM5,
   TestInsight.DUnitX,
   DUnitX.TestFramework,
   Test.Insight.Framework in 'Test.Insight.Framework.pas',
@@ -12,6 +10,8 @@ uses
   Test.Insight.Framework.Classes.Test in 'Test\Test.Insight.Framework.Classes.Test.pas';
 
 begin
+  ReportMemoryLeaksOnShutdown := True;
+
   TestInsight.DUnitX.RunRegisteredTests;
 end.
 
