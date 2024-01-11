@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, System.Rtti, TestInsight.Client;
+uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client;
 
 type
   SetupAttribute = class(TCustomAttribute);
@@ -98,6 +98,7 @@ var
   AMethod: TRttiMethod;
   AType: TRttiType;
   Context: TRttiContext;
+  ExecuteTests: Boolean;
   Instance: TObject;
   SelectedTests: TArray<String>;
   StartedTime: TDateTime;
@@ -122,7 +123,7 @@ var
     CurrentTestName, TestName: String;
 
   begin
-    Result := Length(SelectedTests) = 0;
+    Result := ExecuteTests and (Length(SelectedTests) = 0);
 
     if not Result then
     begin
@@ -178,9 +179,6 @@ var
     end;
   end;
 
-var
-  ExecuteTests: Boolean;
-
 begin
   Context := TRttiContext.Create;
 
@@ -190,6 +188,8 @@ begin
 
   if not Assigned(ObjectResolver) then
     ObjectResolver := CreateObject;
+
+  FTestInsightClient.ClearTests;
 
   FTestInsightClient.StartedTesting(0);
 
@@ -215,7 +215,7 @@ begin
 
             PostResult(TResultType.Skipped);
 
-            if ExecuteTests and CanExecuteTest then
+            if CanExecuteTest then
             begin
               StartedTime := Now;
 

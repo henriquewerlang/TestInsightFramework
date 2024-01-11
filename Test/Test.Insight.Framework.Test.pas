@@ -123,6 +123,8 @@ type
     procedure WhenCheckANilPointerInTheIsNilFunctionCantRaiseAssertionError;
     [Test]
     procedure WhenCheckAPointerWithValueInTheIsNilFunctionMustRaiseAssertionError;
+    [Test]
+    procedure BeforeExecuteTheTestsMustClearAllTests;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -158,6 +160,18 @@ implementation
 uses System.Rtti, Test.Insight.Framework.Classes.Test;
 
 { TAssertTest }
+
+procedure TAssertTest.BeforeExecuteTheTestsMustClearAllTests;
+begin
+  var Client := TTestInsightClientMock.Create;
+  var Test := TTestInsightFramework.Create(Client);
+
+  Test.Run;
+
+  Assert.StartsWith('ClearTests;', Client.CalledProcedures);
+
+  Test.Free;
+end;
 
 procedure TAssertTest.WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
 begin
@@ -735,7 +749,7 @@ begin
 
   Test.Run;
 
-  Assert.StartsWith('StartedTesting;', Client.CalledProcedures);
+  Assert.StartsWith('ClearTests;StartedTesting;', Client.CalledProcedures);
 
   Test.Free;
 end;
