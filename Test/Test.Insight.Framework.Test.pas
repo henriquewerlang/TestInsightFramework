@@ -257,9 +257,11 @@ begin
     begin
       var AObject := TObject.Create;
 
-      Test.Insight.Framework.Assert.IsNil(AObject);
-
-      AObject.Free;
+      try
+        Test.Insight.Framework.Assert.IsNil(AObject);
+      finally
+        AObject.Free;
+      end;
     end, EAssertFail);
 end;
 

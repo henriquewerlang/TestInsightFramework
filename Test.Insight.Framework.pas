@@ -249,14 +249,14 @@ begin
             end;
           end;
 
-          if Assigned(Instance) then
-            CallTearDownFixture;
+        if Assigned(Instance) then
+          CallTearDownFixture;
+      except
+        on Error: Exception do
+          PostError(TResultType.Error, Error.Message);
+      end;
 
-          Instance.Free;
-        except
-          on Error: Exception do
-            PostError(TResultType.Error, Error.Message);
-        end;
+      Instance.Free;
     end;
 
   FTestInsightClient.FinishedTesting;
