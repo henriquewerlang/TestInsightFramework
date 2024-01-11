@@ -11,6 +11,8 @@ type
   TearDownFixtureAttribute = class(TCustomAttribute);
   TestAttribute = class(TCustomAttribute);
   TestFixtureAttribute = class(TCustomAttribute);
+  TObjectResolver = TFunc<TRttiInstanceType, TObject>;
+  TTestClassMethod = class;
 
   TestCaseAttribute = class(TestAttribute)
   public
@@ -24,19 +26,78 @@ type
   EAssertFail = class(Exception)
   end;
 
+  TTestClass = class
+  private
+    FInstance: TObject;
+    FInstanceType: TRttiInstanceType;
+    FMethods: TList<TTestClassMethod>;
+    FObjectResolver: TObjectResolver;
+    FTestSetupFixture: TRttiMethod;
+    FTestTearDownFixture: TRttiMethod;
+
+    function GetInstance: TObject;
+    function GetLastTest: TTestClassMethod;
+
+    procedure CallMethod(const Method: TRttiMethod);
+    procedure LoadSetupAndTearDownMethods;
+  public
+    constructor Create(const InstanceType: TRttiInstanceType; const ObjectResolver: TObjectResolver);
+
+    destructor Destroy; override;
+
+    function AddTestMethod(const Method: TRttiMethod; const CanExecuteTest: Boolean): TTestClassMethod;
+
+    property Instance: TObject read GetInstance;
+    property InstanceType: TRttiInstanceType read FInstanceType;
+    property LastTest: TTestClassMethod read GetLastTest;
+  end;
+
+  TTestClassMethod = class
+  private
+    FCanExecuteTest: Boolean;
+    FTestClass: TTestClass;
+    FTestMethod: TRttiMethod;
+    FTestResult: TTestInsightResult;
+    FTestSetup: TRttiMethod;
+    FTestTearDown: TRttiMethod;
+
+    function CallMethod(const Method: TRttiMethod): Boolean;
+    function GetInstance: TObject;
+    function GetInstanceType: TRttiInstanceType;
+
+    procedure LoadSetupAndTearDownMethods;
+  public
+    constructor Create(const TestMethod: TRttiMethod; const TestClass: TTestClass);
+
+    function CanExecute: Boolean;
+
+    procedure Execute;
+
+    property Instance: TObject read GetInstance;
+    property InstanceType: TRttiInstanceType read GetInstanceType;
+    property TestMethod: TRttiMethod read FTestMethod;
+    property TestResult: TTestInsightResult read FTestResult;
+  end;
+
   TTestInsightFramework = class
   private
     FTestInsightClient: ITestInsightClient;
+    FTestClassesDiscovered: TList<TTestClass>;
+    FTestClassMethodsDiscovered: TList<TTestClassMethod>;
 
     function CreateObject(&Type: TRttiInstanceType): TObject;
+
+    procedure DoExecuteTests;
   public
     constructor Create(const TestInsightClient: ITestInsightClient);
 
+    destructor Destroy; override;
+
     procedure Run; overload;
-    procedure Run(ObjectResolver: TFunc<TRttiInstanceType, TObject>); overload;
+    procedure Run(const ObjectResolver: TObjectResolver); overload;
 
     class procedure ExecuteTests; overload;
-    class procedure ExecuteTests(const ObjectResolver: TFunc<TRttiInstanceType, TObject>); overload;
+    class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;
   end;
 
   Assert = class
@@ -64,6 +125,8 @@ begin
   inherited Create;
 
   FTestInsightClient := TestInsightClient;
+  FTestClassesDiscovered := TObjectList<TTestClass>.Create;
+  FTestClassMethodsDiscovered := TList<TTestClassMethod>.Create;
 end;
 
 function TTestInsightFramework.CreateObject(&Type: TRttiInstanceType): TObject;
@@ -71,7 +134,43 @@ begin
   Result := &Type.MetaclassType.Create;
 end;
 
-class procedure TTestInsightFramework.ExecuteTests(const ObjectResolver: TFunc<TRttiInstanceType, TObject>);
+destructor TTestInsightFramework.Destroy;
+begin
+  FTestClassesDiscovered.Free;
+
+  FTestClassMethodsDiscovered.Free;
+
+  inherited;
+end;
+
+procedure TTestInsightFramework.DoExecuteTests;
+var
+  TestClassMethod: TTestClassMethod;
+
+  procedure PostTestClassInformation;
+  begin
+    FTestInsightClient.PostResult(TestClassMethod.TestResult, True);
+  end;
+
+begin
+  for TestClassMethod in FTestClassMethodsDiscovered do
+  begin
+    PostTestClassInformation;
+
+    if TestClassMethod.CanExecute then
+    begin
+      PostTestClassInformation;
+
+      TestClassMethod.Execute;
+
+      PostTestClassInformation;
+    end;
+  end;
+
+  FTestInsightClient.FinishedTesting;
+end;
+
+class procedure TTestInsightFramework.ExecuteTests(const ObjectResolver: TObjectResolver);
 var
   TestFramework: TTestInsightFramework;
 
@@ -93,175 +192,68 @@ begin
   ExecuteTests(nil);
 end;
 
-procedure TTestInsightFramework.Run(ObjectResolver: TFunc<TRttiInstanceType, TObject>);
+procedure TTestInsightFramework.Run(const ObjectResolver: TObjectResolver);
 var
-  AMethod: TRttiMethod;
-  AType: TRttiType;
-  Context: TRttiContext;
   ExecuteTests: Boolean;
-  Instance: TObject;
   SelectedTests: TArray<String>;
-  StartedTime: TDateTime;
-  TestResult: TTestInsightResult;
+  TestClass: TTestClass;
+  TestClassMethod: TTestClassMethod;
 
-  procedure PostResult(const Result: TResultType);
+  function GetObjectResolver: TObjectResolver;
   begin
-    TestResult.ResultType := Result;
-
-    FTestInsightClient.PostResult(TestResult, True);
+    if Assigned(ObjectResolver) then
+      Result := ObjectResolver
+    else
+      Result := CreateObject;
   end;
 
-  procedure PostError(const Result: TResultType; const Message: String);
-  begin
-    TestResult.ExceptionMessage := Message;
-
-    PostResult(Result);
-  end;
-
-  function CanExecuteTest: Boolean;
+  function CanExecuteTest(const MethodName: String): Boolean;
   var
-    CurrentTestName, TestName: String;
+    TestName: String;
 
   begin
     Result := ExecuteTests and (Length(SelectedTests) = 0);
 
     if not Result then
-    begin
-      CurrentTestName := Format('%s.%s', [AType.QualifiedName, AMethod.Name]);
-
       for TestName in SelectedTests do
-        if CurrentTestName = TestName then
+        if Format('%s.%s', [TestClass.InstanceType.QualifiedName, MethodName]) = TestName then
           Result := True;
-    end;
   end;
 
-  procedure CallProcedureWithAttribute(const AttributeClass: TCustomAttributeClass);
+  procedure DiscoveryAllTests;
   var
-    AMethod: TRttiMethod;
+    Context: TRttiContext;
+    RttiType: TRttiType;
+    TestMethod: TRttiMethod;
 
   begin
-    for AMethod in AType.GetMethods do
-      if AMethod.HasAttribute(AttributeClass) then
+    Context := TRttiContext.Create;
+    ExecuteTests := FTestInsightClient.Options.ExecuteTests;
+    SelectedTests := FTestInsightClient.GetTests;
+
+    for RttiType in Context.GetTypes do
+      if RttiType.IsInstance and RttiType.HasAttribute<TestFixtureAttribute> then
       begin
-        AMethod.Invoke(Instance, []);
+        TestClass := TTestClass.Create(RttiType.AsInstance, GetObjectResolver());
 
-        Exit;
+        FTestClassesDiscovered.Add(TestClass);
+
+        for TestMethod in RttiType.GetMethods do
+          if TestMethod.HasAttribute<TestAttribute> then
+            FTestClassMethodsDiscovered.Add(TestClass.AddTestMethod(TestMethod, CanExecuteTest(TestMethod.Name)));
       end;
-  end;
 
-  procedure CallSetup;
-  begin
-    CallProcedureWithAttribute(SetupAttribute);
-  end;
-
-  procedure CallSetupFixture;
-  begin
-    CallProcedureWithAttribute(SetupFixtureAttribute);
-  end;
-
-  procedure CallTearDownFixture;
-  begin
-    CallProcedureWithAttribute(TearDownFixtureAttribute);
-  end;
-
-  procedure CallTearDown;
-  begin
-    CallProcedureWithAttribute(TearDownAttribute);
-  end;
-
-  procedure CheckInstance;
-  begin
-    if not Assigned(Instance) then
-    begin
-      Instance := ObjectResolver(AType.AsInstance);
-
-      CallSetupFixture;
-    end;
+    Context.Free;
   end;
 
 begin
-  Context := TRttiContext.Create;
-
-{$IFDEF DCC}
-  FillChar(TestResult, SizeOf(TestResult), 0);
-{$ENDIF}
-
-  if not Assigned(ObjectResolver) then
-    ObjectResolver := CreateObject;
-
   FTestInsightClient.ClearTests;
 
-  FTestInsightClient.StartedTesting(0);
+  FTestInsightClient.StartedTesting(FTestClassMethodsDiscovered.Count);
 
-  ExecuteTests := FTestInsightClient.Options.ExecuteTests;
-  SelectedTests := FTestInsightClient.GetTests;
+  DiscoveryAllTests;
 
-  for AType in Context.GetTypes do
-    if AType.IsInstance and AType.HasAttribute<TestFixtureAttribute> then
-    begin
-      Instance := nil;
-
-      try
-        for AMethod in AType.GetMethods do
-          if AMethod.HasAttribute<TestAttribute> then
-          begin
-            TestResult := TTestInsightResult.Create(TResultType.Skipped, AMethod.Name, AType.AsInstance.DeclaringUnitName);
-            TestResult.ClassName := AType.Name;
-            TestResult.Duration := 0;
-            TestResult.ExceptionMessage := EmptyStr;
-            TestResult.MethodName := AMethod.Name;
-            TestResult.Path := AType.QualifiedName;
-            TestResult.UnitName := AType.AsInstance.DeclaringUnitName;
-
-            PostResult(TResultType.Skipped);
-
-            if CanExecuteTest then
-            begin
-              StartedTime := Now;
-
-              PostResult(TResultType.Running);
-
-              CheckInstance;
-
-              try
-                CallSetup;
-
-                try
-                  AMethod.Invoke(Instance, []);
-
-                  TestResult.Duration := MilliSecondsBetween(Now, StartedTime);
-
-                  PostResult(TResultType.Passed);
-                finally
-                  CallTearDown;
-                end;
-              except
-                on TestFail: EAssertFail do
-                  PostError(TResultType.Failed, TestFail.Message);
-
-                on Error: Exception do
-                  PostError(TResultType.Error, Error.Message);
-{$IFDEF PAS2JS}
-                on JSErro: TJSError do
-                  PostError(TResultType.Error, JSErro.Message);
-{$ENDIF}
-              end;
-            end;
-          end;
-
-        if Assigned(Instance) then
-          CallTearDownFixture;
-      except
-        on Error: Exception do
-          PostError(TResultType.Error, Error.Message);
-      end;
-
-      Instance.Free;
-    end;
-
-  FTestInsightClient.FinishedTesting;
-
-  Context.Free;
+  DoExecuteTests;
 end;
 
 { Assert }
@@ -364,6 +356,175 @@ end;
 constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3, Param4, Param5: String);
 begin
 
+end;
+
+{ TTestClassMethod }
+
+function TTestClassMethod.CallMethod(const Method: TRttiMethod): Boolean;
+
+  procedure PostResultWithMessage(const ResultType: TResultType; const Message: String);
+  begin
+    FTestResult.ExceptionMessage := Message;
+    FTestResult.ResultType := ResultType;
+  end;
+
+begin
+  Result := False;
+
+  try
+    FTestClass.CallMethod(Method);
+
+    Result := True;
+  except
+    on TestFail: EAssertFail do
+      PostResultWithMessage(TResultType.Failed, TestFail.Message);
+
+    on Error: Exception do
+      PostResultWithMessage(TResultType.Error, Error.Message);
+{$IFDEF PAS2JS}
+
+    on JSErro: TJSError do
+      PostResultWithMessage(TResultType.Error, JSErro.Message);
+{$ENDIF}
+  end;
+end;
+
+function TTestClassMethod.CanExecute: Boolean;
+begin
+  FTestResult.ResultType := TResultType.Running;
+  Result := FCanExecuteTest;
+end;
+
+constructor TTestClassMethod.Create(const TestMethod: TRttiMethod; const TestClass: TTestClass);
+begin
+  inherited Create;
+
+  FTestClass := TestClass;
+  FTestMethod := TestMethod;
+  FTestResult := TTestInsightResult.Create(TResultType.Skipped, TestMethod.Name, InstanceType.DeclaringUnitName);
+  FTestResult.ClassName := InstanceType.Name;
+  FTestResult.Duration := 0;
+  FTestResult.ExceptionMessage := EmptyStr;
+  FTestResult.MethodName := TestMethod.Name;
+  FTestResult.Path := InstanceType.QualifiedName;
+  FTestResult.UnitName := InstanceType.DeclaringUnitName;
+
+  LoadSetupAndTearDownMethods;
+end;
+
+procedure TTestClassMethod.Execute;
+var
+  StartedTime: TDateTime;
+
+begin
+  StartedTime := Now;
+
+  CallMethod(FTestSetup);
+
+  if CallMethod(FTestMethod) then
+  begin
+    FTestResult.Duration := MilliSecondsBetween(Now, StartedTime);
+    FTestResult.ResultType := TResultType.Passed;
+  end;
+
+  CallMethod(FTestTearDown);
+
+  if FTestClass.LastTest = Self then
+    CallMethod(FTestClass.FTestTearDownFixture);
+end;
+
+function TTestClassMethod.GetInstance: TObject;
+begin
+  Result := FTestClass.Instance;
+end;
+
+function TTestClassMethod.GetInstanceType: TRttiInstanceType;
+begin
+  Result := FTestClass.InstanceType;
+end;
+
+procedure TTestClassMethod.LoadSetupAndTearDownMethods;
+var
+  Method: TRttiMethod;
+
+begin
+  for Method in InstanceType.GetMethods do
+    if Method.HasAttribute<SetupAttribute> then
+      FTestSetup := Method
+    else if Method.HasAttribute<TearDownAttribute> then
+      FTestTearDown := Method;
+end;
+
+{ TTestClass }
+
+function TTestClass.AddTestMethod(const Method: TRttiMethod; const CanExecuteTest: Boolean): TTestClassMethod;
+begin
+  Result := TTestClassMethod.Create(Method, Self);
+  Result.FCanExecuteTest := CanExecuteTest;
+
+  FMethods.Add(Result);
+end;
+
+procedure TTestClass.CallMethod(const Method: TRttiMethod);
+begin
+  if Assigned(Method) then
+    Method.Invoke(Instance, []);
+end;
+
+constructor TTestClass.Create(const InstanceType: TRttiInstanceType; const ObjectResolver: TObjectResolver);
+begin
+  inherited Create;
+
+  FInstanceType := InstanceType;
+  FMethods := TObjectList<TTestClassMethod>.Create;
+  FObjectResolver := ObjectResolver;
+
+  LoadSetupAndTearDownMethods;
+end;
+
+destructor TTestClass.Destroy;
+begin
+  FInstance.Free;
+
+  FMethods.Free;
+
+  inherited;
+end;
+
+function TTestClass.GetInstance: TObject;
+begin
+  if not Assigned(FInstance) then
+  begin
+    FInstance := FObjectResolver(InstanceType);
+
+    CallMethod(FTestSetupFixture);
+  end;
+
+  Result := FInstance;
+end;
+
+function TTestClass.GetLastTest: TTestClassMethod;
+var
+  Test: TTestClassMethod;
+
+begin
+  Result := nil;
+
+  for Test in FMethods do
+    if Test.FCanExecuteTest then
+      Result := Test;
+end;
+
+procedure TTestClass.LoadSetupAndTearDownMethods;
+var
+  Method: TRttiMethod;
+
+begin
+  for Method in InstanceType.GetMethods do
+    if Method.HasAttribute<SetupFixtureAttribute> then
+      FTestSetupFixture := Method
+    else if Method.HasAttribute<TearDownFixtureAttribute> then
+      FTestTearDownFixture := Method;
 end;
 
 end.

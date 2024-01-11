@@ -37,8 +37,6 @@ type
     [Test]
     procedure WhenHasSelectedTestsMustRunOnlyTheSelectedTests;
     [Test]
-    procedure MustExecuteOnlyTheSelectedTest;
-    [Test]
     procedure MustCreateTheClassOnlyIfWillExecuteAnTest;
     [Test]
     procedure BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
@@ -140,8 +138,8 @@ type
 
     procedure ClearTests;
     procedure FinishedTesting;
-    procedure PostResult(const testResult: TTestInsightResult; sendImmediately: Boolean = False);
-    procedure PostResults(const testResults: array of TTestInsightResult; sendImmediately: Boolean = False);
+    procedure PostResult(const testResult: TTestInsightResult; sendImmediately: Boolean);
+    procedure PostResults(const testResults: array of TTestInsightResult; sendImmediately: Boolean);
     procedure RegisterProcedureCall(const ProcedureName: String);
     procedure SetOptions(const value: TTestInsightOptions);
     procedure StartedTesting(const totalCount: Integer);
@@ -462,19 +460,6 @@ begin
   Test.Free;
 end;
 
-procedure TTestInsightFrameworkTest.MustExecuteOnlyTheSelectedTest;
-begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
-  var Test := TTestInsightFramework.Create(Client);
-
-  Test.Run;
-
-  Assert.IsTrue(Client.PostedTests.ContainsKey('Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'));
-
-  Test.Free;
-end;
-
 procedure TTestInsightFrameworkTest.MustPostResultOfAllClassesWithTheTestFixtureAttribute;
 begin
   var Client := TTestInsightClientMock.Create;
@@ -730,14 +715,21 @@ end;
 procedure TTestInsightFrameworkTest.WhenHasSelectedTestsMustRunOnlyTheSelectedTests;
 begin
   var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
+  var ExecutedCount := 0;
   var Test := TTestInsightFramework.Create(Client);
+  var TestName := 'Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2';
+
+  Client.Tests := [TestName];
 
   Test.Run;
 
-  for var TheTest in Client.PostedTests.Values do
-    if TheTest.ResultType = TResultType.Passed then
-      Assert.AreEqual('Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2', TheTest.Path + '.' + TheTest.TestName);
+  for var Result in Client.PostedTests.Values do
+    if Result.ResultType <> TResultType.Skipped then
+      Inc(ExecutedCount);
+
+  Assert.AreEqual(1, ExecutedCount);
+
+  Assert.AreEqual(TResultType.Passed, Client.PostedTests[TestName].ResultType);
 
   Test.Free;
 end;
