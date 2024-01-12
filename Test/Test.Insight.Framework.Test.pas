@@ -5,6 +5,8 @@ interface
 uses System.SysUtils, System.Generics.Collections, Test.Insight.Framework, DUnitX.TestFramework, TestInsight.Client;
 
 type
+  TTestInsightClientMock = class;
+
   EExpectedError = class(Exception)
   public
     constructor Create;
@@ -17,9 +19,21 @@ type
 
   [TestFixture]
   TTestInsightFrameworkTest = class
+  private
+    FClient: TTestInsightClientMock;
+    FTest: TTestInsightFramework;
+
+    procedure ExecuteTests;
+    procedure WaitForTimer;
   public
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
     [Test]
     procedure WhenRunTheTestsMustStartTheTestInTheClient;
+    [Test]
+    procedure WhenCallTheStartedTestingMustLoadTheTotalTestsToBeExecuted;
     [Test]
     procedure AfterRunTheTestsMustCallTheFinishedTesting;
     [Test]
@@ -76,6 +90,16 @@ type
     procedure WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;
     [Test]
     procedure WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
+    [Test]
+    procedure BeforeExecuteTheTestsMustClearAllTests;
+    [Test]
+    procedure WhenExecuteAnAsyncAssertionCantDestroyTheClassBeforeTheResumeIsCalled;
+    [Test]
+    procedure WhenExecuteATestWithAsyncAssertionMustExecuteTheAssertionWhemCallTheResume;
+    [Test]
+    procedure WhenAnAsyncAssertIsCalledTheTestsMustStopExecutingUntilResumeIsCalled;
+    [Test]
+    procedure MustPostTheResumeOfAsyncTestToThResultTests;
   end;
 
   [TestFixture]
@@ -122,7 +146,11 @@ type
     [Test]
     procedure WhenCheckAPointerWithValueInTheIsNilFunctionMustRaiseAssertionError;
     [Test]
-    procedure BeforeExecuteTheTestsMustClearAllTests;
+    procedure ThenCallTheAsyncAssertMustRaiseAsyncException;
+    [Test]
+    procedure WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller;
+    [Test]
+    procedure WhenCallTheAsyncAssertWithANilParamMustRaiseAnError;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -131,6 +159,7 @@ type
     FOptions: TTestInsightOptions;
     FPostedTests: TDictionary<String, TTestInsightResult>;
     FTests: TArray<String>;
+    FTotalTests: Integer;
 
     function GetHasError: Boolean;
     function GetOptions: TTestInsightOptions;
@@ -151,24 +180,35 @@ type
     property CalledProcedures: String read FCalledProcedures write FCalledProcedures;
     property PostedTests: TDictionary<String, TTestInsightResult> read FPostedTests;
     property Tests: TArray<String> read FTests write FTests;
+    property TotalTests: Integer read FTotalTests write FTotalTests;
   end;
 
 implementation
 
-uses System.Rtti, Test.Insight.Framework.Classes.Test;
+uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
+
+const
+  TEST_COUNT = 25;
+
+//procedure WaitForTimer;
+//begin
+//  if Assigned(TTestInsightFramework.AsyncAssert) then
+//  begin
+//    Sleep(TTestInsightFramework.AsyncTimeout + 10);
+//
+//    Application.ProcessMessages;
+//  end;
+//end;
 
 { TAssertTest }
 
-procedure TAssertTest.BeforeExecuteTheTestsMustClearAllTests;
+procedure TAssertTest.ThenCallTheAsyncAssertMustRaiseAsyncException;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
-
-  Test.Run;
-
-  Assert.StartsWith('ClearTests;', Client.CalledProcedures);
-
-  Test.Free;
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.Async(ThenCallTheAsyncAssertMustRaiseAsyncException);
+    end, EAssertAsync);
 end;
 
 procedure TAssertTest.WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
@@ -233,6 +273,27 @@ begin
     end, EExpectedError);
 
   Assert.IsTrue(Executed);
+end;
+
+procedure TAssertTest.WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller;
+begin
+  try
+    Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller);
+  except
+    on AsynErro: EAssertAsync do
+      Assert.IsTrue(Assigned(AsynErro.AsyncProc));
+    else
+      raise;
+  end;
+end;
+
+procedure TAssertTest.WhenCallTheAsyncAssertWithANilParamMustRaiseAnError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.Async(nil);
+    end, EAssertAsyncEmptyProcedure);
 end;
 
 procedure TAssertTest.WhenCheckAnEmptyExpectationCantRaiseAnyError;
@@ -391,280 +452,272 @@ end;
 
 procedure TTestInsightFrameworkTest.AfterExecuteTheTestsOfAnClassMustCallTearDownFixtureOfTheClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
     'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test3'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixture.TearDownFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.AfterRunTheTestsMustCallTheFinishedTesting;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
+  WaitForTimer;
 
-  Assert.EndsWith('FinishedTesting;', Client.CalledProcedures);
+  Assert.EndsWith('FinishedTesting;', FClient.CalledProcedures);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.BeforeExecuteTheTestsMustClearAllTests;
+begin
+  ExecuteTests;
+
+  Assert.IsTrue(FClient.CalledProcedures.Contains(';ClearTests;StartedTesting;'));
 end;
 
 procedure TTestInsightFrameworkTest.BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
     'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test3'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.SetupFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixture.SetupFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.EvenTheTestGivingErrorMustCallTheTearDownProcedure;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test2',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test2',
     'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test3'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.TearDownCalled);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.ExecuteTests;
+begin
+  FTest.Run;
 end;
 
 procedure TTestInsightFrameworkTest.MustCreateTheClassOnlyIfWillExecuteAnTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
 
   Assert.AreEqual(0, TClassWithoutTest.CreationCount);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.MustPostResultOfAllClassesWithTheTestFixtureAttribute;
+ begin
+  ExecuteTests;
+
+  WaitForTimer;
+
+  Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
+end;
+
+procedure TTestInsightFrameworkTest.MustPostTheResumeOfAsyncTestToThResultTests;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  var TestName := 'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.AsyncAssert';
 
-  Test.Run;
+  FClient.Tests := [TestName];
 
-  Assert.AreEqual(20, Client.PostedTests.Count);
+  ExecuteTests;
 
-  Test.Free;
+  WaitForTimer;
+
+  Assert.AreEqual(TResultType.Passed, FClient.PostedTests[TestName].ResultType);
+end;
+
+procedure TTestInsightFrameworkTest.Setup;
+begin
+  FClient := TTestInsightClientMock.Create;
+  FTest := TTestInsightFramework.Create(FClient, nil);
+end;
+
+procedure TTestInsightFrameworkTest.TearDown;
+begin
+  WaitForTimer;
+
+  FTest.Free;
 end;
 
 procedure TTestInsightFrameworkTest.TheDurationOfTheTestMustBeFilledWithTheTimeToExecuteTheTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
   WaitForTest := True;
 
-  Test.Run;
+  ExecuteTests;
 
   WaitForTest := False;
 
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest2.Test2'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest2.Test2'];
 
   Assert.IsTrue(TestResult.Duration >= 500);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.TheTestResultMustBeFilledHasExpected;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
 
   Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
   Assert.AreEqual('Test.Insight.Framework.Classes.Test', TestResult.UnitName);
   Assert.AreEqual('TMyClassTest', TestResult.ClassName);
   Assert.AreEqual('Test', TestResult.MethodName);
   Assert.AreEqual('Test.Insight.Framework.Classes.Test.TMyClassTest', TestResult.Path);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.WaitForTimer;
+begin
+  Sleep(FTest.AsyncTimeout + 10);
+
+  Application.ProcessMessages;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test12',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test12',
     'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test13'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassInheritedFromAnotherClass.SetupFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallTheProcedureFromInheritedClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
   TClassInheritedFromAnotherClass.SetupFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallOnlyOneByTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
     'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test13'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassInheritedFromAnotherClass.SetupCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(3, TClassInheritedFromAnotherClass.SetupCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallTheProcedureFromInheritedClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
   TClassInheritedFromAnotherClass.SetupCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
     'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test13'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallTheProcedureFromInheritedClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
   TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownFixtureCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCallOnlyOneByTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test11', 'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test12',
     'Test.Insight.Framework.Classes.Test.TClassInheritedFromAnotherClass.Test13'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassInheritedFromAnotherClass.TearDownCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(3, TClassInheritedFromAnotherClass.TearDownCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCallTheProcedureFromInheritedClass;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
   TClassInheritedFromAnotherClass.TearDownCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownCalled);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.WhenAnAsyncAssertIsCalledTheTestsMustStopExecutingUntilResumeIsCalled;
+begin
+  var ExecutedCount := 0;
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.Test1', 'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.Test2', 'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.Test3',
+    'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.Test4', 'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.AsyncAssert'];
+
+  ExecuteTests;
+
+  for var Result in FClient.PostedTests.Values do
+    if Result.ResultType <> TResultType.Skipped then
+      Inc(ExecutedCount);
+
+  Assert.AreEqual(3, ExecutedCount);
 end;
 
 procedure TTestInsightFrameworkTest.WhenATestFailMustPostTheResultError;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual(TResultType.Failed, TestResult.ResultType);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenATestRaiseAnErrorMustPostTheError;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest2.Test'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest2.Test'];
 
   Assert.AreEqual(TResultType.Error, TestResult.ResultType);
   Assert.AreEqual('An error!', TestResult.ExceptionMessage);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.WhenCallTheStartedTestingMustLoadTheTotalTestsToBeExecuted;
+begin
+  ExecuteTests;
+
+  Assert.AreEqual(TEST_COUNT, FClient.TotalTests);
 end;
 
 procedure TTestInsightFrameworkTest.WhenDiscoveringTestsCantExecuteAnyTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.FOptions.ExecuteTests := False;
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.FOptions.ExecuteTests := False;
 
   TClassWithSetupAndTearDownFixture.SetupCalled := 0;
   TClassWithSetupAndTearDownFixture.SetupFixtureCalled := 0;
@@ -672,93 +725,95 @@ begin
   TClassWithSetupAndTearDownFixture.TearDownFixtureCalled := 0;
   TClassWithSetupAndTearDownFixture.TestCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(0, TClassWithSetupAndTearDownFixture.SetupCalled + TClassWithSetupAndTearDownFixture.SetupFixtureCalled + TClassWithSetupAndTearDownFixture.TearDownCalled
     + TClassWithSetupAndTearDownFixture.TearDownFixtureCalled + TClassWithSetupAndTearDownFixture.TestCalled);
+end;
 
-  Test.Free;
+procedure TTestInsightFrameworkTest.WhenExecuteAnAsyncAssertionCantDestroyTheClassBeforeTheResumeIsCalled;
+begin
+  TClassWithAsyncTest.DestroyCalled := False;
+
+  ExecuteTests;
+
+  Assert.IsFalse(TClassWithAsyncTest.DestroyCalled);
+end;
+
+procedure TTestInsightFrameworkTest.WhenExecuteATestWithAsyncAssertionMustExecuteTheAssertionWhemCallTheResume;
+begin
+  TClassWithAsyncTest.AssertCalled := False;
+
+  ExecuteTests;
+
+  Assert.IsFalse(TClassWithAsyncTest.AssertCalled);
+
+  WaitForTimer;
+
+  Assert.IsTrue(TClassWithAsyncTest.AssertCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheSetupProcedureForEveryTestProcedureCalled;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
     'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test3'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.SetupCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.SetupCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenExecuteTheTestsOfAClassMustCallTheTearDownProcedureForEveryTestProcedureCalled;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test', 'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test2',
     'Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.Test3'];
-  var Test := TTestInsightFramework.Create(Client);
 
   TClassWithSetupAndTearDownFixture.TearDownCalled := 0;
 
-  Test.Run;
+  ExecuteTests;
 
   Assert.AreEqual(3, TClassWithSetupAndTearDownFixture.TearDownCalled);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenHasSelectedTestsMustRunOnlyTheSelectedTests;
 begin
-  var Client := TTestInsightClientMock.Create;
   var ExecutedCount := 0;
-  var Test := TTestInsightFramework.Create(Client);
   var TestName := 'Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2';
 
-  Client.Tests := [TestName];
+  FClient.Tests := [TestName];
 
-  Test.Run;
+  ExecuteTests;
 
-  for var Result in Client.PostedTests.Values do
+  for var Result in FClient.PostedTests.Values do
     if Result.ResultType <> TResultType.Skipped then
       Inc(ExecutedCount);
 
   Assert.AreEqual(1, ExecutedCount);
 
-  Assert.AreEqual(TResultType.Passed, Client.PostedTests[TestName].ResultType);
-
-  Test.Free;
+  Assert.AreEqual(TResultType.Passed, FClient.PostedTests[TestName].ResultType);
 end;
 
 procedure TTestInsightFrameworkTest.WhenRunTheTestsMustStartTheTestInTheClient;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  Assert.StartsWith('ClearTests;StartedTesting;', Client.CalledProcedures);
-
-  Test.Free;
+  Assert.IsTrue(FClient.CalledProcedures.Contains(';StartedTesting;'));
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
   var FunctionExecuted := False;
-  var Test := TTestInsightFramework.Create(Client);
-
-  Test.Run(
+  var Test := TTestInsightFramework.Create(FClient,
     function (&Type: TRttiInstanceType): TObject
     begin
       FunctionExecuted := True;
       Result := TClassInheritedFromWithoutSetupAndTearDown.Create;
     end);
+
+  Test.Run;
 
   Assert.IsTrue(FunctionExecuted);
 
@@ -767,73 +822,55 @@ end;
 
 procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
   TClassWithSetupError.SetupFixtureRaiseError := True;
 
-  Test.Run;
+  ExecuteTests;
 
-  Assert.AreEqual(20, Client.PostedTests.Count);
+  WaitForTimer;
 
-  Test.Free;
+  Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
   TClassWithSetupError.TearDownFixtureRaiseError := True;
 
-  Test.Run;
+  ExecuteTests;
 
-  Assert.AreEqual(20, Client.PostedTests.Count);
+  WaitForTimer;
 
-  Test.Free;
+  Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheTestFailMustRegisterTheErrorMessageInTheResult;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual('The value expected is 10 and the current value is 20', TestResult.ExceptionMessage);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheTestIsExecutedMustPostTheResultHasSuccess;
 begin
-  var Client := TTestInsightClientMock.Create;
-  var Test := TTestInsightFramework.Create(Client);
+  ExecuteTests;
 
-  Test.Run;
-
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
 
   Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
-
-  Test.Free;
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheTestIsntExecutedMustRegisterTheTestAsSkiped;
 begin
-  var Client := TTestInsightClientMock.Create;
-  Client.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
-  var Test := TTestInsightFramework.Create(Client);
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest.Test'];
 
-  Test.Run;
+  ExecuteTests;
 
-  Assert.IsTrue(Client.PostedTests.ContainsKey('Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'));
+  Assert.IsTrue(FClient.PostedTests.ContainsKey('Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'));
 
-  var TestResult := Client.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual(TResultType.Skipped, TestResult.ResultType);
-
-  Test.Free;
 end;
 
 { TTestInsightClientMock }
@@ -909,6 +946,8 @@ end;
 
 procedure TTestInsightClientMock.StartedTesting(const totalCount: Integer);
 begin
+  TotalTests := totalCount;
+
   RegisterProcedureCall('StartedTesting');
 end;
 

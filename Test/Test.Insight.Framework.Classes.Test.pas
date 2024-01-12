@@ -2,9 +2,11 @@
 
 interface
 
-uses Test.Insight.Framework;
+uses System.SysUtils, Test.Insight.Framework;
 
 type
+  EIgnoreDebugError = class(Exception);
+
   [TestFixture]
   TClassWithSetupError = class
   public
@@ -105,12 +107,41 @@ type
     procedure Test11;
   end;
 
+  [TestFixture]
+  TClassWithAsyncTest = class
+  private
+    class var FAssertCalled: Boolean;
+    class var FDestroyCalled: Boolean;
+    class var FTearDownCalled: Boolean;
+    class var FTearDownFixtureCalled: Boolean;
+  public
+    destructor Destroy; override;
+
+    [TearDownFixture]
+    procedure TearDownFixture;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure Test1;
+    [Test]
+    procedure Test2;
+    [Test]
+    procedure AsyncAssert;
+    [Test]
+    procedure Test3;
+    [Test]
+    procedure Test4;
+
+    class property AssertCalled: Boolean read FAssertCalled write FAssertCalled;
+    class property DestroyCalled: Boolean read FDestroyCalled write FDestroyCalled;
+    class property TearDownCalled: Boolean read FTearDownCalled write FTearDownCalled;
+    class property TearDownFixtureCalled: Boolean read FTearDownFixtureCalled write FTearDownFixtureCalled;
+  end;
+
 var
   WaitForTest: Boolean = False;
 
 implementation
-
-uses System.SysUtils;
 
 { TMyClassTest }
 
@@ -128,7 +159,7 @@ end;
 
 procedure TMyClassTest2.Test;
 begin
-  raise Exception.Create('An error!');
+  raise EIgnoreDebugError.Create('An error!');
 end;
 
 procedure TMyClassTest2.Test2;
@@ -194,7 +225,7 @@ procedure TClassWithSetupAndTearDownFixture.Test3;
 begin
   Inc(TestCalled);
 
-  raise Exception.Create('Any error!');
+  raise EIgnoreDebugError.Create('Any error!');
 end;
 
 { TClassInheritedFromAnotherClass }
@@ -246,16 +277,65 @@ end;
 procedure TClassWithSetupError.SetupFixture;
 begin
   if SetupFixtureRaiseError then
-    raise Exception.Create('SetupFixture Error!');
+    raise EIgnoreDebugError.Create('SetupFixture Error!');
 end;
 
 procedure TClassWithSetupError.TearDownFixture;
 begin
   if TearDownFixtureRaiseError then
-    raise Exception.Create('TeardownFixture Error');
+    raise EIgnoreDebugError.Create('TeardownFixture Error');
 end;
 
 procedure TClassWithSetupError.Test;
+begin
+
+end;
+
+{ TClassWithAsyncTest }
+
+procedure TClassWithAsyncTest.AsyncAssert;
+begin
+  Assert.Async(
+    procedure
+    begin
+      FAssertCalled := True;
+      Assert.IsTrue(True);
+    end);
+end;
+
+destructor TClassWithAsyncTest.Destroy;
+begin
+  DestroyCalled := True;
+
+  inherited;
+end;
+
+procedure TClassWithAsyncTest.TearDown;
+begin
+
+end;
+
+procedure TClassWithAsyncTest.TearDownFixture;
+begin
+
+end;
+
+procedure TClassWithAsyncTest.Test1;
+begin
+
+end;
+
+procedure TClassWithAsyncTest.Test2;
+begin
+
+end;
+
+procedure TClassWithAsyncTest.Test3;
+begin
+
+end;
+
+procedure TClassWithAsyncTest.Test4;
 begin
 
 end;
