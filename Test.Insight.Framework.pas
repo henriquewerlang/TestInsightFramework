@@ -13,6 +13,7 @@ type
   TestFixtureAttribute = class(TCustomAttribute);
   TObjectResolver = TFunc<TRttiInstanceType, TObject>;
   TTestClassMethod = class;
+  TTimerType = {$IFDEF PAS2JS}JSValue{$ELSE}TTimer{$ENDIF};
 
   TestCaseAttribute = class(TestAttribute)
   public
@@ -26,10 +27,12 @@ type
   EAssertAsync = class(Exception)
   private
     FAsyncProc: TProc;
+    FTimeOut: Integer;
   public
-    constructor Create(const AsyncProc: TProc);
+    constructor Create(const AsyncProc: TProc; const TimeOut: Integer);
 
     property AsyncProc: TProc read FAsyncProc write FAsyncProc;
+    property TimeOut: Integer read FTimeOut write FTimeOut;
   end;
 
   EAssertAsyncEmptyProcedure = class(Exception)
@@ -99,7 +102,7 @@ type
   TTestInsightFramework = class
   private
     FAsyncAssert: TProc;
-    FAsyncTimeout: Integer;
+    FAsyncTimer: TTimerType;
     FContext: TRttiContext;
     FCurrentClassTesting: TEnumerator<TTestClass>;
     FCurrentClassMethodTesting: TEnumerator<TTestClassMethod>;
@@ -114,7 +117,7 @@ type
     procedure OnTimer(Sender: TObject);
     procedure PostTestClassInformation;
     procedure Resume;
-    procedure StartAsyncTimer;
+    procedure StartAsyncTimer(const AsyncInfo: EAssertAsync);
 
     property AsyncAssert: TProc read FAsyncAssert write FAsyncAssert;
     property CurrentClassMethod: TTestClassMethod read GetCurrentClassMethod;
@@ -124,18 +127,17 @@ type
     destructor Destroy; override;
 
     procedure Run;
+    procedure WaitForAsyncExecution;
 
     class procedure ExecuteTests; overload;
     class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;
-
-    property AsyncTimeout: Integer read FAsyncTimeout write FAsyncTimeout;
   end;
 
   Assert = class
   public
     class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
-    class procedure Async(const Proc: TProc);
+    class procedure Async(const Proc: TProc; const TimeOut: Integer = 50);
     class procedure CheckExpectation(const Expectation: String);
     class procedure IsFalse(const Value: Boolean);
     class procedure IsNil(const Value: Pointer);
@@ -148,7 +150,7 @@ type
 
 implementation
 
-uses System.DateUtils{$IFDEF PAS2JS}, JS, Web{$ENDIF};
+uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}JS, Web{$ENDIF};
 
 { TTestInsightFramework }
 
@@ -156,7 +158,6 @@ constructor TTestInsightFramework.Create(const TestInsightClient: ITestInsightCl
 begin
   inherited Create;
 
-  FAsyncTimeout := 50;
   FObjectResolver := ObjectResolver;
   FTestClassesDiscovered := TObjectList<TTestClass>.Create;
   FTestInsightClient := TestInsightClient;
@@ -213,9 +214,7 @@ begin
       except
         on AsyncException: EAssertAsync do
         begin
-          AsyncAssert := AsyncException.AsyncProc;
-
-          StartAsyncTimer;
+          StartAsyncTimer(AsyncException);
 
           Exit;
         end
@@ -238,6 +237,12 @@ begin
   Test := TTestInsightFramework.Create(TTestInsightRestClient.Create, ObjectResolver);
 
   Test.Run;
+
+{$IFDEF DCC}
+  Test.WaitForAsyncExecution;
+
+  Test.Free;
+{$ENDIF}
 end;
 
 function TTestInsightFramework.GetCurrentClassMethod: TTestClassMethod;
@@ -250,7 +255,9 @@ begin
   if Assigned(AsyncAssert) then
   begin
 {$IFDEF DCC}
-    Sender.Free;
+    FAsyncTimer.OnTimer := nil;
+
+    FAsyncTimer.Free;
 {$ENDIF}
 
     Resume;
@@ -344,18 +351,31 @@ begin
   DoExecuteTests;
 end;
 
-procedure TTestInsightFramework.StartAsyncTimer;
+procedure TTestInsightFramework.StartAsyncTimer(const AsyncInfo: EAssertAsync);
 begin
+  FAsyncAssert := AsyncInfo.AsyncProc;
 {$IFDEF DCC}
-  var Timer := TTimer.Create(nil);
-  Timer.Interval := AsyncTimeout;
-  Timer.OnTimer := OnTimer;
+  FAsyncTimer := TTimer.Create(nil);
+  FAsyncTimer.Interval := AsyncInfo.TimeOut;
+  FAsyncTimer.OnTimer := OnTimer;
 {$ELSE}
-  Window.SetTimeOut(
+  FAsyncTimer := Window.SetTimeOut(
     procedure
     begin
       OnTimer(nil);
-    end, AsyncTimeout);
+    end, AsyncInfo.TimeOut);
+{$ENDIF}
+end;
+
+procedure TTestInsightFramework.WaitForAsyncExecution;
+begin
+{$IFDEF DCC}
+  if Assigned(FAsyncTimer) then
+  begin
+    Sleep(FAsyncTimer.Interval + 50);
+
+    Application.ProcessMessages;
+  end;
 {$ENDIF}
 end;
 
@@ -373,12 +393,12 @@ begin
     raise EAssertFail.CreateFmt('The value expected is %s and the current value is %s', [TValue.From<T>(Expected).ToString, TValue.From<T>(CurrentValue).ToString]);
 end;
 
-class procedure Assert.Async(const Proc: TProc);
+class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer);
 begin
   if not Assigned(Proc) then
     raise EAssertAsyncEmptyProcedure.Create;
 
-  raise EAssertAsync.Create(Proc);
+  raise EAssertAsync.Create(Proc, TimeOut);
 end;
 
 class procedure Assert.CheckExpectation(const Expectation: String);
@@ -576,9 +596,9 @@ var
 
 begin
   for Method in InstanceType.GetMethods do
-    if Method.HasAttribute<SetupAttribute> then
+    if Method.HasAttribute<SetupAttribute> and not Assigned(FTestSetup) then
       FTestSetup := Method
-    else if Method.HasAttribute<TearDownAttribute> then
+    else if Method.HasAttribute<TearDownAttribute> and not Assigned(FTestTearDown) then
       FTestTearDown := Method;
 end;
 
@@ -648,19 +668,20 @@ var
 
 begin
   for Method in InstanceType.GetMethods do
-    if Method.HasAttribute<SetupFixtureAttribute> then
+    if Method.HasAttribute<SetupFixtureAttribute> and not Assigned(FTestSetupFixture) then
       FTestSetupFixture := Method
-    else if Method.HasAttribute<TearDownFixtureAttribute> then
+    else if Method.HasAttribute<TearDownFixtureAttribute> and not Assigned(FTestTearDownFixture) then
       FTestTearDownFixture := Method;
 end;
 
 { EAssertAsync }
 
-constructor EAssertAsync.Create(const AsyncProc: TProc);
+constructor EAssertAsync.Create(const AsyncProc: TProc; const TimeOut: Integer);
 begin
   inherited Create(EmptyStr);
 
   FAsyncProc := AsyncProc;
+  FTimeOut := TimeOut;
 end;
 
 { EAssertAsyncEmptyProcedure }

@@ -24,6 +24,7 @@ type
     FTest: TTestInsightFramework;
 
     procedure ExecuteTests;
+    procedure ExecuteTestsAndWait;
     procedure WaitForTimer;
   public
     [Setup]
@@ -98,6 +99,8 @@ type
     procedure WhenAnAsyncAssertIsCalledTheTestsMustStopExecutingUntilResumeIsCalled;
     [Test]
     procedure MustPostTheResumeOfAsyncTestToThResultTests;
+    [Test]
+    procedure WhenAnInheritedClassHasSetupAndTearDownMethodsMustCallOnlyTheMethodsInTheHigherClassInheritance;
   end;
 
   [TestFixture]
@@ -149,6 +152,8 @@ type
     procedure WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller;
     [Test]
     procedure WhenCallTheAsyncAssertWithANilParamMustRaiseAnError;
+    [Test]
+    procedure WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -186,17 +191,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 25;
-
-//procedure WaitForTimer;
-//begin
-//  if Assigned(TTestInsightFramework.AsyncAssert) then
-//  begin
-//    Sleep(TTestInsightFramework.AsyncTimeout + 10);
-//
-//    Application.ProcessMessages;
-//  end;
-//end;
+  TEST_COUNT = 32;
 
 { TAssertTest }
 
@@ -292,6 +287,18 @@ begin
     begin
       Test.Insight.Framework.Assert.Async(nil);
     end, EAssertAsyncEmptyProcedure);
+end;
+
+procedure TAssertTest.WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
+begin
+  try
+    Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller, 150);
+  except
+    on AsynErro: EAssertAsync do
+      Assert.AreEqual(150, AsynErro.TimeOut);
+    else
+      raise;
+  end;
 end;
 
 procedure TAssertTest.WhenCheckAnEmptyExpectationCantRaiseAnyError;
@@ -462,9 +469,7 @@ end;
 
 procedure TTestInsightFrameworkTest.AfterRunTheTestsMustCallTheFinishedTesting;
 begin
-  ExecuteTests;
-
-  WaitForTimer;
+  ExecuteTestsAndWait;
 
   Assert.EndsWith('FinishedTesting;', FClient.CalledProcedures);
 end;
@@ -498,6 +503,13 @@ begin
   FTest.Run;
 end;
 
+procedure TTestInsightFrameworkTest.ExecuteTestsAndWait;
+begin
+  ExecuteTests;
+
+  WaitForTimer;
+end;
+
 procedure TTestInsightFrameworkTest.MustCreateTheClassOnlyIfWillExecuteAnTest;
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
@@ -507,9 +519,7 @@ end;
 
 procedure TTestInsightFrameworkTest.MustPostResultOfAllClassesWithTheTestFixtureAttribute;
  begin
-  ExecuteTests;
-
-  WaitForTimer;
+  ExecuteTestsAndWait;
 
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
@@ -520,9 +530,7 @@ begin
 
   FClient.Tests := [TestName];
 
-  ExecuteTests;
-
-  WaitForTimer;
+  ExecuteTestsAndWait;
 
   Assert.AreEqual(TResultType.Passed, FClient.PostedTests[TestName].ResultType);
 end;
@@ -568,9 +576,7 @@ end;
 
 procedure TTestInsightFrameworkTest.WaitForTimer;
 begin
-  Sleep(FTest.AsyncTimeout + 10);
-
-  Application.ProcessMessages;
+  FTest.WaitForAsyncExecution;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
@@ -589,11 +595,11 @@ procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallTh
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
-  TClassInheritedFromAnotherClass.SetupFixtureCalled := 0;
+  TClassInheritedFromWithoutSetupAndTearDown.SetupFixtureCalled := 0;
 
   ExecuteTests;
 
-  Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupFixtureCalled);
+  Assert.AreEqual(1, TClassInheritedFromWithoutSetupAndTearDown.SetupFixtureCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallOnlyOneByTest;
@@ -612,11 +618,11 @@ procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFunctionMustCallT
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
-  TClassInheritedFromAnotherClass.SetupCalled := 0;
+  TClassInheritedFromWithoutSetupAndTearDown.SetupCalled := 0;
 
   ExecuteTests;
 
-  Assert.AreEqual(1, TClassInheritedFromAnotherClass.SetupCalled);
+  Assert.AreEqual(1, TClassInheritedFromWithoutSetupAndTearDown.SetupCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCallOnlyOneTimeTheFunction;
@@ -635,11 +641,11 @@ procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFixtureMustCal
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
-  TClassInheritedFromAnotherClass.TearDownFixtureCalled := 0;
+  TClassInheritedFromWithoutSetupAndTearDown.TearDownFixtureCalled := 0;
 
   ExecuteTests;
 
-  Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownFixtureCalled);
+  Assert.AreEqual(1, TClassInheritedFromWithoutSetupAndTearDown.TearDownFixtureCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCallOnlyOneByTest;
@@ -658,11 +664,11 @@ procedure TTestInsightFrameworkTest.WhenAClassInheritesTheTearDownFunctionMustCa
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
 
-  TClassInheritedFromAnotherClass.TearDownCalled := 0;
+  TClassInheritedFromWithoutSetupAndTearDown.TearDownCalled := 0;
 
   ExecuteTests;
 
-  Assert.AreEqual(1, TClassInheritedFromAnotherClass.TearDownCalled);
+  Assert.AreEqual(1, TClassInheritedFromWithoutSetupAndTearDown.TearDownCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAnAsyncAssertIsCalledTheTestsMustStopExecutingUntilResumeIsCalled;
@@ -678,6 +684,23 @@ begin
       Inc(ExecutedCount);
 
   Assert.AreEqual(3, ExecutedCount);
+end;
+
+procedure TTestInsightFrameworkTest.WhenAnInheritedClassHasSetupAndTearDownMethodsMustCallOnlyTheMethodsInTheHigherClassInheritance;
+begin
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixtureHighInheritance.MyTest'];
+
+  TClassWithSetupAndTearDownFixtureHighInheritance.SetupCalled := 0;
+  TClassWithSetupAndTearDownFixtureHighInheritance.SetupFixtureCalled := 0;
+  TClassWithSetupAndTearDownFixtureHighInheritance.TearDownCalled := 0;
+  TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixtureCalled := 0;
+
+  ExecuteTestsAndWait;
+
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.SetupCalled, 'Setup');
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.SetupFixtureCalled, 'Setup fixture');
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownCalled, 'Tear down');
+  Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixtureCalled, 'Tear down fixture');
 end;
 
 procedure TTestInsightFrameworkTest.WhenATestFailMustPostTheResultError;
@@ -815,9 +838,7 @@ procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorCantStopExecu
 begin
   TClassWithSetupError.SetupFixtureRaiseError := True;
 
-  ExecuteTests;
-
-  WaitForTimer;
+  ExecuteTestsAndWait;
 
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
@@ -826,9 +847,7 @@ procedure TTestInsightFrameworkTest.WhenTheTearDownFixtureRaiseAnErrorCantStopEx
 begin
   TClassWithSetupError.TearDownFixtureRaiseError := True;
 
-  ExecuteTests;
-
-  WaitForTimer;
+  ExecuteTestsAndWait;
 
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;

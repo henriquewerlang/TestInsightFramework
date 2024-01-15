@@ -58,12 +58,12 @@ type
 
   [TestFixture]
   TClassWithSetupAndTearDownFixture = class
-  public
-    class var SetupCalled: Integer;
-    class var SetupFixtureCalled: Integer;
-    class var TearDownCalled: Integer;
-    class var TearDownFixtureCalled: Integer;
-    class var TestCalled: Integer;
+  public class var
+    SetupCalled: Integer;
+    SetupFixtureCalled: Integer;
+    TearDownCalled: Integer;
+    TearDownFixtureCalled: Integer;
+    TestCalled: Integer;
 
     [SetupFixture]
     procedure SetupFixture;
@@ -102,9 +102,28 @@ type
 
   [TestFixture]
   TClassInheritedFromWithoutSetupAndTearDown = class(TClassWithSetupAndTearDownFixture)
-  public
     [Test]
     procedure Test11;
+  end;
+
+  [TestFixture]
+  TClassWithSetupAndTearDownFixtureHighInheritance = class(TClassInheritedFromAnotherClass)
+  public class var
+    SetupCalled: Integer;
+    SetupFixtureCalled: Integer;
+    TearDownCalled: Integer;
+    TearDownFixtureCalled: Integer;
+
+    [SetupFixture]
+    procedure SetupFixture;
+    [TearDownFixture]
+    procedure TearDownFixture;
+    [Setup]
+    procedure Setup;
+    [TearDown]
+    procedure TearDown;
+    [Test]
+    procedure MyTest;
   end;
 
   [TestFixture]
@@ -340,4 +359,32 @@ begin
 
 end;
 
+{ TClassWithSetupAndTearDownFixtureHighInheritance }
+
+procedure TClassWithSetupAndTearDownFixtureHighInheritance.MyTest;
+begin
+
+end;
+
+procedure TClassWithSetupAndTearDownFixtureHighInheritance.Setup;
+begin
+  Inc(SetupCalled);
+end;
+
+procedure TClassWithSetupAndTearDownFixtureHighInheritance.SetupFixture;
+begin
+  Inc(SetupFixtureCalled);
+end;
+
+procedure TClassWithSetupAndTearDownFixtureHighInheritance.TearDown;
+begin
+  Inc(TearDownCalled);
+end;
+
+procedure TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixture;
+begin
+  Inc(TearDownFixtureCalled);
+end;
+
 end.
+
