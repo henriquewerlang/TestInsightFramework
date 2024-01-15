@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, System.Rtti, System.Generics.Collections, {$IFDEF DCC}Vcl.ExtCtrls, {$ENDIF}TestInsight.Client;
+uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}JS{$ENDIF};
 
 type
   SetupAttribute = class(TCustomAttribute);
@@ -13,7 +13,7 @@ type
   TestFixtureAttribute = class(TCustomAttribute);
   TObjectResolver = TFunc<TRttiInstanceType, TObject>;
   TTestClassMethod = class;
-  TTimerType = {$IFDEF PAS2JS}JSValue{$ELSE}TTimer{$ENDIF};
+  TTimerType = {$IFDEF PAS2JS}TJSPromise{$ELSE}TTimer{$ENDIF};
 
   TestCaseAttribute = class(TestAttribute)
   public
@@ -127,10 +127,10 @@ type
     destructor Destroy; override;
 
     procedure Run;
-    procedure WaitForAsyncExecution;
+    procedure WaitForAsyncExecution;{$IFDEF PAS2JS} async;{$ENDIF}
 
-    class procedure ExecuteTests; overload;
-    class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;
+    class procedure ExecuteTests; overload;{$IFDEF PAS2JS} async;{$ENDIF}
+    class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
   Assert = class
@@ -150,7 +150,7 @@ type
 
 implementation
 
-uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}JS, Web{$ENDIF};
+uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}Web{$ENDIF};
 
 { TTestInsightFramework }
 
@@ -238,9 +238,9 @@ begin
 
   Test.Run;
 
-{$IFDEF DCC}
-  Test.WaitForAsyncExecution;
+  {$IFDEF PAS2JS}await{$ENDIF}(Test.WaitForAsyncExecution);
 
+{$IFDEF DCC}
   Test.Free;
 {$ENDIF}
 end;
@@ -271,7 +271,7 @@ end;
 
 class procedure TTestInsightFramework.ExecuteTests;
 begin
-  ExecuteTests(nil);
+  {$IFDEF PAS2JS}await{$ENDIF}(ExecuteTests(nil));
 end;
 
 procedure TTestInsightFramework.Resume;
@@ -359,18 +359,26 @@ begin
   FAsyncTimer.Interval := AsyncInfo.TimeOut;
   FAsyncTimer.OnTimer := OnTimer;
 {$ELSE}
-  FAsyncTimer := Window.SetTimeOut(
-    procedure
+  FAsyncTimer := TJSPromise.New(
+    procedure (Resolver: TProc)
     begin
-      OnTimer(nil);
-    end, AsyncInfo.TimeOut);
+      Window.SetTimeOut(
+        procedure
+        begin
+          OnTimer(nil);
+
+          Resolver;
+        end, AsyncInfo.TimeOut);
+    end);
 {$ENDIF}
 end;
 
 procedure TTestInsightFramework.WaitForAsyncExecution;
 begin
-{$IFDEF DCC}
   if Assigned(FAsyncTimer) then
+{$IFDEF PAS2JS}
+    await(TJSPromise.all([FAsyncTimer]));
+{$ELSE}
   begin
     Sleep(FAsyncTimer.Interval + 50);
 
