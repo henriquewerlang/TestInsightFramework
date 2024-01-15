@@ -91,8 +91,6 @@ type
     [Test]
     procedure WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
     [Test]
-    procedure BeforeExecuteTheTestsMustClearAllTests;
-    [Test]
     procedure WhenExecuteAnAsyncAssertionCantDestroyTheClassBeforeTheResumeIsCalled;
     [Test]
     procedure WhenExecuteATestWithAsyncAssertionMustExecuteTheAssertionWhemCallTheResume;
@@ -469,13 +467,6 @@ begin
   WaitForTimer;
 
   Assert.EndsWith('FinishedTesting;', FClient.CalledProcedures);
-end;
-
-procedure TTestInsightFrameworkTest.BeforeExecuteTheTestsMustClearAllTests;
-begin
-  ExecuteTests;
-
-  Assert.IsTrue(FClient.CalledProcedures.Contains(';ClearTests;StartedTesting;'));
 end;
 
 procedure TTestInsightFrameworkTest.BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;

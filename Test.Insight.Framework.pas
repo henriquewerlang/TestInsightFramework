@@ -100,6 +100,7 @@ type
   private
     FAsyncAssert: TProc;
     FAsyncTimeout: Integer;
+    FContext: TRttiContext;
     FCurrentClassTesting: TEnumerator<TTestClass>;
     FCurrentClassMethodTesting: TEnumerator<TTestClassMethod>;
     FObjectResolver: TObjectResolver;
@@ -177,6 +178,8 @@ begin
 
   FCurrentClassMethodTesting.Free;
 
+  FContext.Free;
+
   inherited;
 end;
 
@@ -225,8 +228,6 @@ begin
   end;
 
   FTestInsightClient.FinishedTesting;
-
-  Free;
 end;
 
 class procedure TTestInsightFramework.ExecuteTests(const ObjectResolver: TObjectResolver);
@@ -298,16 +299,15 @@ var
 
   procedure DiscoveryAllTests;
   var
-    Context: TRttiContext;
     RttiType: TRttiType;
     TestMethod: TRttiMethod;
 
   begin
-    Context := TRttiContext.Create;
+    FContext := TRttiContext.Create;
     ExecuteTests := FTestInsightClient.Options.ExecuteTests;
     SelectedTests := FTestInsightClient.GetTests;
 
-    for RttiType in Context.GetTypes do
+    for RttiType in FContext.GetTypes do
       if RttiType.IsInstance and RttiType.HasAttribute<TestFixtureAttribute> then
       begin
         TestClass := TTestClass.Create(RttiType.AsInstance, FObjectResolver);
@@ -318,8 +318,6 @@ var
           if TestMethod.HasAttribute<TestAttribute> then
             TestClass.AddTestMethod(TestMethod, CanExecuteTest(TestMethod.Name));
       end;
-
-    Context.Free;
   end;
 
   function GetTestCount: Integer;
@@ -338,10 +336,6 @@ var
 
 begin
   DiscoveryAllTests;
-
-{$IFDEF DCC}
-  FTestInsightClient.ClearTests;
-{$ENDIF}
 
   FTestInsightClient.StartedTesting(GetTestCount);
 
