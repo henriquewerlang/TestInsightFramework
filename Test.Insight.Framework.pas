@@ -152,6 +152,11 @@ implementation
 
 uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}Web{$ENDIF};
 
+{$IFDEF PAS2JS}
+var
+  GlobalResolvePromise: TProc;
+{$ENDIF}
+
 { TTestInsightFramework }
 
 constructor TTestInsightFramework.Create(const TestInsightClient: ITestInsightClient; const ObjectResolver: TObjectResolver);
@@ -227,22 +232,39 @@ begin
   end;
 
   FTestInsightClient.FinishedTesting;
+
+{$IFDEF PAS2JS}
+  GlobalResolvePromise();
+{$ENDIF}
 end;
 
 class procedure TTestInsightFramework.ExecuteTests(const ObjectResolver: TObjectResolver);
 var
+{$IFDEF PAS2JS}
+  Promise: TJSPromise;
+{$ENDIF}
   Test: TTestInsightFramework;
 
 begin
+{$IFDEF PAS2JS}
+  Promise := TJSPromise.New(
+    procedure (Resolver: TProc)
+    begin
+      GlobalResolvePromise := Resolver;
+    end);
+{$ENDIF}
+
   Test := TTestInsightFramework.Create(TTestInsightRestClient.Create, ObjectResolver);
 
   Test.Run;
 
   {$IFDEF PAS2JS}await{$ENDIF}(Test.WaitForAsyncExecution);
 
-{$IFDEF DCC}
-  Test.Free;
+{$IFDEF PAS2JS}
+  await(TJSPromise.all([Promise]));
 {$ENDIF}
+
+  Test.Free;
 end;
 
 function TTestInsightFramework.GetCurrentClassMethod: TTestClassMethod;
