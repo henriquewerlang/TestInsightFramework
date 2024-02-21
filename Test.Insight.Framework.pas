@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}JS{$ENDIF};
+uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}JSApi.JS{$ENDIF};
 
 type
   SetupAttribute = class(TCustomAttribute);
@@ -150,7 +150,7 @@ type
 
 implementation
 
-uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}Web{$ENDIF};
+uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.Web{$ENDIF};
 
 {$IFDEF PAS2JS}
 var
