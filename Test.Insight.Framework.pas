@@ -139,6 +139,7 @@ type
     class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
     class procedure Async(const Proc: TProc; const TimeOut: Integer = 50);
     class procedure CheckExpectation(const Expectation: String);
+    class procedure GreaterThan(const Expected, CurrentValue: NativeInt);
     class procedure IsFalse(const Value: Boolean);
     class procedure IsNil(const Value: Pointer);
     class procedure IsNotNil(const Value: Pointer);
@@ -435,6 +436,12 @@ class procedure Assert.CheckExpectation(const Expectation: String);
 begin
   if not Expectation.IsEmpty then
     raise EAssertFail.CreateFmt('Expectation not achieved [%s]', [Expectation]);
+end;
+
+class procedure Assert.GreaterThan(const Expected, CurrentValue: NativeInt);
+begin
+  if not (CurrentValue > Expected) then
+    raise EAssertFail.CreateFmt('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]);
 end;
 
 class procedure Assert.IsFalse(const Value: Boolean);

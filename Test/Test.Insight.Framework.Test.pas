@@ -154,6 +154,8 @@ type
     procedure WhenCallTheAsyncAssertWithANilParamMustRaiseAnError;
     [Test]
     procedure WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
+    [Test]
+    procedure WhenTheValueIsntGreaterThanMustRaiseAnAssertionError;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -420,6 +422,15 @@ begin
     begin
       Test.Insight.Framework.Assert.AreEqual(10, 10);
     end);
+end;
+
+procedure TAssertTest.WhenTheValueIsntGreaterThanMustRaiseAnAssertionError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.GreaterThan(10, 5);
+    end, EAssertFail);
 end;
 
 procedure TAssertTest.WhenTheValuesAreNotEqualMustRaiseAnError;
