@@ -15,15 +15,6 @@ type
   TTestClassMethod = class;
   TTimerType = {$IFDEF PAS2JS}TJSPromise{$ELSE}TTimer{$ENDIF};
 
-  TestCaseAttribute = class(TestAttribute)
-  public
-    constructor Create(const TestName, Param: String); overload;
-    constructor Create(const TestName, Param1, Param2: String); overload;
-    constructor Create(const TestName, Param1, Param2, Param3: String); overload;
-    constructor Create(const TestName, Param1, Param2, Param3, Param4: String); overload;
-    constructor Create(const TestName, Param1, Param2, Param3, Param4, Param5: String); overload;
-  end;
-
   EAssertAsync = class(Exception)
   private
     FAsyncProc: TProc;
@@ -40,7 +31,10 @@ type
     constructor Create;
   end;
 
-  EAssertFail = class(Exception);
+  EAssertFail = class(Exception)
+  public
+    constructor Create(const AssertionMessage, Message: String);
+  end;
 
   TTestClass = class
   private
@@ -135,18 +129,20 @@ type
 
   Assert = class
   public
-    class procedure AreEqual(const Expected, CurrentValue: String); overload; // compiler problem...
-    class procedure AreEqual<T>(const Expected, CurrentValue: T); overload;
-    class procedure Async(const Proc: TProc; const TimeOut: Integer = 50);
-    class procedure CheckExpectation(const Expectation: String);
-    class procedure GreaterThan(const Expected, CurrentValue: NativeInt);
-    class procedure IsFalse(const Value: Boolean);
-    class procedure IsNil(const Value: Pointer);
-    class procedure IsNotNil(const Value: Pointer);
-    class procedure IsTrue(const Value: Boolean);
-    class procedure StartWith(const Expected, Value: String);
-    class procedure WillNotRaise(const Proc: TProc);
-    class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
+    class procedure AreEqual(const Expected, CurrentValue: String; const Message: String = ''); overload; // compiler problem...
+    class procedure AreEqual<T>(const Expected, CurrentValue: T; const Message: String = ''); overload;
+    class procedure Async(const Proc: TProc; const TimeOut: Integer = 50; const Message: String = '');
+    class procedure CheckExpectation(const Expectation: String; const Message: String = '');
+    class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = '');
+    class procedure IsEmpty(const Value: String; const Message: String = '');
+    class procedure IsFalse(const Value: Boolean; const Message: String = '');
+    class procedure IsNil(const Value: Pointer; const Message: String = '');
+    class procedure IsNotEmpty(const Value: String; const Message: String = '');
+    class procedure IsNotNil(const Value: Pointer; const Message: String = '');
+    class procedure IsTrue(const Value: Boolean; const Message: String = '');
+    class procedure StartWith(const Expected, Value: String; const Message: String = '');
+    class procedure WillNotRaise(const Proc: TProc; const Message: String = '');
+    class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass; const Message: String = '');
   end;
 
 implementation
@@ -412,19 +408,19 @@ end;
 
 { Assert }
 
-class procedure Assert.AreEqual(const Expected, CurrentValue: String);
+class procedure Assert.AreEqual(const Expected, CurrentValue, Message: String);
 begin
   if Expected <> CurrentValue then
-    raise EAssertFail.CreateFmt('The value expected is %s and the current value is %s', [Expected, CurrentValue]);
+    raise EAssertFail.Create(Format('The value expected is %s and the current value is %s', [Expected, CurrentValue]), Message);
 end;
 
-class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T);
+class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T; const Message: String);
 begin
   if Expected <> CurrentValue then
-    raise EAssertFail.CreateFmt('The value expected is %s and the current value is %s', [TValue.From<T>(Expected).ToString, TValue.From<T>(CurrentValue).ToString]);
+    raise EAssertFail.Create(Format('The value expected is %s and the current value is %s', [TValue.From<T>(Expected).ToString, TValue.From<T>(CurrentValue).ToString]), Message);
 end;
 
-class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer);
+class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer; const Message: String);
 begin
   if not Assigned(Proc) then
     raise EAssertAsyncEmptyProcedure.Create;
@@ -432,49 +428,61 @@ begin
   raise EAssertAsync.Create(Proc, TimeOut);
 end;
 
-class procedure Assert.CheckExpectation(const Expectation: String);
+class procedure Assert.CheckExpectation(const Expectation, Message: String);
 begin
   if not Expectation.IsEmpty then
     raise EAssertFail.CreateFmt('Expectation not achieved [%s]', [Expectation]);
 end;
 
-class procedure Assert.GreaterThan(const Expected, CurrentValue: NativeInt);
+class procedure Assert.GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String);
 begin
   if not (CurrentValue > Expected) then
     raise EAssertFail.CreateFmt('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]);
 end;
 
-class procedure Assert.IsFalse(const Value: Boolean);
+class procedure Assert.IsEmpty(const Value, Message: String);
+begin
+  if not Value.IsEmpty then
+    raise EAssertFail.Create('The string must be empty!', Message);
+end;
+
+class procedure Assert.IsFalse(const Value: Boolean; const Message: String);
 begin
   if Value then
-    raise EAssertFail.Create('A FALSE value is expected!');
+    raise EAssertFail.Create('A FALSE value is expected!', Message);
 end;
 
-class procedure Assert.IsNil(const Value: Pointer);
+class procedure Assert.IsNil(const Value: Pointer; const Message: String);
 begin
   if Assigned(Value) then
-    raise EAssertFail.Create('A nil pointer expected!');
+    raise EAssertFail.Create('A nil pointer expected!', Message);
 end;
 
-class procedure Assert.IsNotNil(const Value: Pointer);
+class procedure Assert.IsNotEmpty(const Value, Message: String);
+begin
+  if Value.IsEmpty then
+    raise EAssertFail.Create('The string must not be empty!', Message);
+end;
+
+class procedure Assert.IsNotNil(const Value: Pointer; const Message: String);
 begin
   if not Assigned(Value) then
-    raise EAssertFail.Create('Not nil pointer expected!');
+    raise EAssertFail.Create('Not nil pointer expected!', Message);
 end;
 
-class procedure Assert.IsTrue(const Value: Boolean);
+class procedure Assert.IsTrue(const Value: Boolean; const Message: String);
 begin
   if not Value then
-    raise EAssertFail.Create('A TRUE value is expected!');
+    raise EAssertFail.Create('A TRUE value is expected!', Message);
 end;
 
-class procedure Assert.StartWith(const Expected, Value: String);
+class procedure Assert.StartWith(const Expected, Value, Message: String);
 begin
   if not Value.StartsWith(Expected) then
-    raise EAssertFail.CreateFmt('Expected start with "%s" but started with "%s"', [Expected, Value]);
+    raise EAssertFail.Create(Format('Expected start with "%s" but started with "%s"', [Expected, Value]), Message);
 end;
 
-class procedure Assert.WillNotRaise(const Proc: TProc);
+class procedure Assert.WillNotRaise(const Proc: TProc; const Message: String);
 begin
   try
     Proc();
@@ -484,7 +492,7 @@ begin
   end;
 end;
 
-class procedure Assert.WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass);
+class procedure Assert.WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass; const Message: String);
 begin
   try
     Proc();
@@ -496,34 +504,7 @@ begin
         raise EAssertFail.CreateFmt('Unexpected exception raised %s!', [Error.ClassName]);
   end;
 
-  raise EAssertFail.Create('No exceptions raised!');
-end;
-
-{ TestCaseAttribute }
-
-constructor TestCaseAttribute.Create(const TestName, Param: String);
-begin
-
-end;
-
-constructor TestCaseAttribute.Create(const TestName, Param1, Param2: String);
-begin
-
-end;
-
-constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3: String);
-begin
-
-end;
-
-constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3, Param4: String);
-begin
-
-end;
-
-constructor TestCaseAttribute.Create(const TestName, Param1, Param2, Param3, Param4, Param5: String);
-begin
-
+  raise EAssertFail.Create('No exceptions raised!', Message);
 end;
 
 { TTestClassMethod }
@@ -726,6 +707,16 @@ end;
 constructor EAssertAsyncEmptyProcedure.Create;
 begin
   inherited Create('The asynchronous procedure can''t be nil!');
+end;
+
+{ EAssertFail }
+
+constructor EAssertFail.Create(const AssertionMessage, Message: String);
+begin
+  if Message.IsEmpty then
+    inherited Create(AssertionMessage)
+  else
+    inherited CreateFmt('%s, Message: %s', [AssertionMessage, Message])
 end;
 
 end.

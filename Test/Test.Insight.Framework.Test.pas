@@ -156,6 +156,14 @@ type
     procedure WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
     [Test]
     procedure WhenTheValueIsntGreaterThanMustRaiseAnAssertionError;
+    [Test]
+    procedure WhenTheStringValueIsNotEmptyMustRaiseAssertionError;
+    [Test]
+    procedure WhenTheStringValueIsEmptyCantRaiseAssertionError;
+    [Test]
+    procedure WhenAssertTheIsNotEmptyMustRaiseAssertionErroIfTheStringIsEmpty;
+    [Test]
+    procedure WhenAssertTheIsNotEmptyMustNOtRaiseAssertionErroIfTheStringIsNotEmpty;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -234,6 +242,24 @@ begin
         begin
           raise EExpectedError.Create;
         end);
+    end, EAssertFail);
+end;
+
+procedure TAssertTest.WhenAssertTheIsNotEmptyMustNOtRaiseAssertionErroIfTheStringIsNotEmpty;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsNotEmpty('abc');
+    end);
+end;
+
+procedure TAssertTest.WhenAssertTheIsNotEmptyMustRaiseAssertionErroIfTheStringIsEmpty;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsNotEmpty('');
     end, EAssertFail);
 end;
 
@@ -413,6 +439,24 @@ begin
 
       AObject.Free;
     end);
+end;
+
+procedure TAssertTest.WhenTheStringValueIsEmptyCantRaiseAssertionError;
+begin
+  Assert.WillNotRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsEmpty('');
+    end);
+end;
+
+procedure TAssertTest.WhenTheStringValueIsNotEmptyMustRaiseAssertionError;
+begin
+  Assert.WillRaise(
+    procedure
+    begin
+      Test.Insight.Framework.Assert.IsEmpty('abc');
+    end, EAssertFail);
 end;
 
 procedure TAssertTest.WhenTheValueAreEqualCantRaiseAnyError;
