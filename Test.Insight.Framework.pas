@@ -33,7 +33,7 @@ type
 
   EAssertFail = class(Exception)
   public
-    constructor Create(const AssertionMessage, Message: String);
+    constructor Create(const AssertionMessage, Message: String); reintroduce;
   end;
 
   TTestClass = class
@@ -431,13 +431,13 @@ end;
 class procedure Assert.CheckExpectation(const Expectation, Message: String);
 begin
   if not Expectation.IsEmpty then
-    raise EAssertFail.CreateFmt('Expectation not achieved [%s]', [Expectation]);
+    raise EAssertFail.Create(Format('Expectation not achieved [%s]', [Expectation]), Message);
 end;
 
 class procedure Assert.GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String);
 begin
   if not (CurrentValue > Expected) then
-    raise EAssertFail.CreateFmt('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]);
+    raise EAssertFail.Create(Format('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]), Message);
 end;
 
 class procedure Assert.IsEmpty(const Value, Message: String);
@@ -488,7 +488,7 @@ begin
     Proc();
   except
     on Error: Exception do
-      raise EAssertFail.CreateFmt('Unexpected exception raised %s!', [Error.ClassName]);
+      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
   end;
 end;
 
@@ -501,7 +501,7 @@ begin
       if Error is ExceptionClass then
         Exit
       else
-        raise EAssertFail.CreateFmt('Unexpected exception raised %s!', [Error.ClassName]);
+        raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
   end;
 
   raise EAssertFail.Create('No exceptions raised!', Message);
@@ -716,7 +716,7 @@ begin
   if Message.IsEmpty then
     inherited Create(AssertionMessage)
   else
-    inherited CreateFmt('%s, Message: %s', [AssertionMessage, Message])
+    inherited CreateFmt('%s, Message: %s', [AssertionMessage, Message]);
 end;
 
 end.
