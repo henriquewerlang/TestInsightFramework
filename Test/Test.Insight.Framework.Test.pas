@@ -21,6 +21,7 @@ type
   TTestInsightFrameworkTest = class
   private
     FClient: TTestInsightClientMock;
+    FKeepWaiting: Boolean;
     FTest: TTestInsightFramework;
 
     procedure ExecuteTests;
@@ -101,6 +102,8 @@ type
     procedure MustPostTheResumeOfAsyncTestToThResultTests;
     [Test]
     procedure WhenAnInheritedClassHasSetupAndTearDownMethodsMustCallOnlyTheMethodsInTheHigherClassInheritance;
+    [Test]
+    procedure WhenTerminateTheExecutionMustCallOnTerminateEvent;
   end;
 
   [TestFixture]
@@ -302,7 +305,7 @@ begin
     Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller);
   except
     on AsynErro: EAssertAsync do
-      Assert.IsTrue(Assigned(AsynErro.AsyncProc));
+      Assert.IsTrue(Assigned(AsynErro.AssertAsyncProcedure));
     else
       raise;
   end;
@@ -555,6 +558,8 @@ end;
 
 procedure TTestInsightFrameworkTest.ExecuteTests;
 begin
+  FKeepWaiting := True;
+
   FTest.Run;
 end;
 
@@ -569,11 +574,13 @@ procedure TTestInsightFrameworkTest.MustCreateTheClassOnlyIfWillExecuteAnTest;
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TMyClassTest3.Test2'];
 
+  ExecuteTestsAndWait;
+
   Assert.AreEqual(0, TClassWithoutTest.CreationCount);
 end;
 
 procedure TTestInsightFrameworkTest.MustPostResultOfAllClassesWithTheTestFixtureAttribute;
- begin
+begin
   ExecuteTestsAndWait;
 
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
@@ -593,7 +600,13 @@ end;
 procedure TTestInsightFrameworkTest.Setup;
 begin
   FClient := TTestInsightClientMock.Create;
-  FTest := TTestInsightFramework.Create(FClient, nil);
+  FTest := TTestInsightFramework.Create(FClient, nil, False);
+
+  FTest.OnTerminate :=
+    procedure
+    begin
+      FKeepWaiting := False;
+    end;
 end;
 
 procedure TTestInsightFrameworkTest.TearDown;
@@ -631,7 +644,12 @@ end;
 
 procedure TTestInsightFrameworkTest.WaitForTimer;
 begin
-  FTest.WaitForAsyncExecution;
+  while FKeepWaiting do
+  begin
+    Application.ProcessMessages;
+
+    Sleep(10);
+  end;
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
@@ -871,6 +889,27 @@ begin
   Assert.IsTrue(FClient.CalledProcedures.Contains(';StartedTesting;'));
 end;
 
+procedure TTestInsightFrameworkTest.WhenTerminateTheExecutionMustCallOnTerminateEvent;
+begin
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
+  var OnTerminateCalled := False;
+  var Test := TTestInsightFramework.Create(FClient, nil, False);
+
+  Test.OnTerminate :=
+    procedure
+    begin
+      OnTerminateCalled := True;
+    end;
+
+  Test.Run;
+
+  Sleep(100);
+
+  Assert.IsTrue(OnTerminateCalled);
+
+  Test.Free;
+end;
+
 procedure TTestInsightFrameworkTest.WhenTheObjectResolverFunctionIsFilledMustCallTheFunctionToCreateTheObjectInstance;
 begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassInheritedFromWithoutSetupAndTearDown.Test11'];
@@ -880,7 +919,7 @@ begin
     begin
       FunctionExecuted := True;
       Result := TClassInheritedFromWithoutSetupAndTearDown.Create;
-    end);
+    end, False);
 
   Test.Run;
 
