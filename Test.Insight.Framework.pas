@@ -174,7 +174,7 @@ end;
 
 constructor TTestInsightFramework.Create(const ObjectResolver: TObjectResolver; const AutoDestroy: Boolean);
 begin
-  Create(TTestInsightRestClient.Create, ObjectResolver, AutoDestroy);
+  Create(TTestInsightRestClient.Create as ITestInsightClient, ObjectResolver, AutoDestroy);
 end;
 
 function TTestInsightFramework.CreateObject(&Type: TRttiInstanceType): TObject;
