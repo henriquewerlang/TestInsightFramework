@@ -285,7 +285,7 @@ end;
 
 procedure TTestInsightFramework.PostTestResult;
 begin
-  FTestInsightClient.PostResult(FTestResult, True);
+  FTestInsightClient.PostResult(FTestResult);
 end;
 
 class procedure TTestInsightFramework.ExecuteTests;
