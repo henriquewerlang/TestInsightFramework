@@ -99,6 +99,7 @@ type
   TTestInsightFramework = class
   private
     FAutoDestroy: Boolean;
+    FContext: TRttiContext;
     FContinueExecution: Boolean;
     FObjectResolver: TObjectResolver;
     FOnTerminate: TProc;
@@ -121,6 +122,8 @@ type
     procedure PostTestResult;
     procedure StartTestClassExecution(const TestClass: TTestClass);
     procedure StartTestMethodExecution(const TestMethod: TTestClassMethod);
+
+    property Context: TRttiContext read FContext;
   public
     constructor Create(const ObjectResolver: TObjectResolver; const AutoDestroy: Boolean); overload;
     constructor Create(const TestInsightClient: ITestInsightClient; const ObjectResolver: TObjectResolver; const AutoDestroy: Boolean); overload;
@@ -164,6 +167,7 @@ begin
   inherited Create;
 
   FAutoDestroy := AutoDestroy;
+  FContext := TRttiContext.Create;
   FObjectResolver := ObjectResolver;
   FTestInsightClient := TestInsightClient;
   FTestQueue := TObjectQueue<TTestClass>.Create;
@@ -314,12 +318,10 @@ var
 
   procedure DiscoveryAllTests;
   var
-    Context: TRttiContext;
     RttiType: TRttiType;
     TestMethod: TRttiMethod;
 
   begin
-    Context := TRttiContext.Create;
     ExecuteTests := FTestInsightClient.Options.ExecuteTests;
     SelectedTests := FTestInsightClient.GetTests;
 
@@ -723,11 +725,9 @@ end;
 procedure TTestClass.OnTimerAssertAsync(Sender: TObject);
 var
   ExecuteAssertAsyncMethod: TRttiMethod;
-  Context: TRttiContext;
 
 begin
-  Context := TRttiContext.Create;
-  ExecuteAssertAsyncMethod := Context.GetType(ClassType).GetMethod('ExecuteAssertAsync');
+  ExecuteAssertAsyncMethod := FTester.Context.GetType(ClassType).GetMethod('ExecuteAssertAsync');
 
 {$IFDEF DCC}
   Sender.Free;
