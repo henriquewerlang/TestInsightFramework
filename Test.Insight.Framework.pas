@@ -36,6 +36,7 @@ type
     constructor Create(const AssertionMessage, Message: String); reintroduce;
   end;
 
+{$M+}
   TTestClass = class
   private
     FAssertAsyncProcedure: TProc;
