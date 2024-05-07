@@ -80,7 +80,7 @@ type
 
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
-    procedure ExecuteAssertAsync;
+    procedure ExecuteAssertAsync;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
   TTestClassMethod = class
@@ -544,17 +544,14 @@ begin
           .&Then(
             procedure
             begin
-              SuccessProcedure;
+              if Assigned(SuccessProcedure) then
+                SuccessProcedure;
             end)
           .&Finally(
             procedure
             begin
               if CanContinue then
-              begin
                 NextProcedure;
-
-                ContinueTesting;
-              end;
             end);
 
         Exit;
@@ -667,7 +664,7 @@ end;
 
 procedure TTestClass.ExecuteAssertAsync;
 begin
-  FAssertAsyncProcedure();
+  {$IFDEF PAS2JS}await{$ENDIF}(FAssertAsyncProcedure());
 end;
 
 procedure TTestClass.ExecuteTestMethod(const Instance: TObject; const TestMethod: TRttiMethod; const NextProcedure: TProc);
