@@ -214,7 +214,7 @@ begin
     procedure
     begin
       Test.Insight.Framework.Assert.Async(ThenCallTheAsyncAssertMustRaiseAsyncException);
-    end, EAssertAsync);
+    end, EAsyncAssert);
 end;
 
 procedure TAssertTest.WhenAFalseValueIsExpectedAndAFalseValueIsPassedCantRaiseAnyError;
@@ -304,7 +304,7 @@ begin
   try
     Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller);
   except
-    on AsynErro: EAssertAsync do
+    on AsynErro: EAsyncAssert do
       Assert.IsTrue(Assigned(AsynErro.AssertAsyncProcedure));
     else
       raise;
@@ -317,7 +317,7 @@ begin
     procedure
     begin
       Test.Insight.Framework.Assert.Async(nil);
-    end, EAssertAsyncEmptyProcedure);
+    end, EAsyncAssertEmptyProcedure);
 end;
 
 procedure TAssertTest.WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
@@ -325,7 +325,7 @@ begin
   try
     Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller, 150);
   except
-    on AsynErro: EAssertAsync do
+    on AsynErro: EAsyncAssert do
       Assert.AreEqual(150, AsynErro.TimeOut);
     else
       raise;
