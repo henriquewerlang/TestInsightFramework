@@ -164,6 +164,12 @@ implementation
 
 uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.Web{$ENDIF};
 
+{$IFDEF PAS2JS}
+var
+  AcquireExceptionObject: TObject; external name '$e';
+{$ENDIF}
+
+
 { TTestInsightFramework }
 
 constructor TTestInsightFramework.Create(const TestInsightClient: ITestInsightClient; const ObjectResolver: TObjectResolver; const AutoDestroy: Boolean);
@@ -206,7 +212,7 @@ begin
 
     FinishTestExecution;
   except
-    ShowException({$IFDEF DCC}AcquireExceptionObject{$ELSE}TObject(JSExceptValue){$ENDIF});
+    ShowException(AcquireExceptionObject);
   end;
 end;
 
@@ -475,6 +481,10 @@ begin
   except
     on Error: Exception do
       raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
+{$IFDEF PAS2JS}
+    on JSError: TJSError do
+      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
+{$ENDIF}
   end;
 end;
 
@@ -577,7 +587,7 @@ begin
 
     ExecuteSuccess;
   except
-    CheckException({$IFDEF DCC}AcquireExceptionObject{$ELSE}TObject(JSExceptValue){$ENDIF});
+    CheckException(AcquireExceptionObject);
   end;
 
   NextProcedure;
@@ -590,6 +600,7 @@ var
   TestFail: EAssertFail absolute ExceptionObject;
 {$IFDEF PAS2JS}
   JSErro: TJSError absolute ExceptionObject;
+  JSMessage: String absolute ExceptionObject;
 {$ENDIF}
 
 begin
@@ -617,11 +628,16 @@ begin
 {$IFDEF PAS2JS}
   else if JSValue(ExceptionObject) is TJSError then
     FinishMethodTestExecutionError(JSErro.Message)
+  else if isString(ExceptionObject) then
+    FinishMethodTestExecutionError(JSMessage)
 {$ENDIF}
   else if ExceptionObject is EAssertFail then
     FinishMethodTestExecutionFail(TestFail.Message)
   else if ExceptionObject is Exception then
-    FinishMethodTestExecutionError(Error.Message);
+    if Error.Message.IsEmpty then
+      FinishMethodTestExecutionError(Error.QualifiedClassName)
+    else
+      FinishMethodTestExecutionError(Error.Message);
 
 {$IFDEF DCC}
   ExceptionObject.Free;
@@ -751,7 +767,7 @@ begin
 
     ContinueTesting;
   except
-    FTester.ShowException({$IFDEF DCC}AcquireExceptionObject{$ELSE}TObject(JSExceptValue){$ENDIF});
+    FTester.ShowException(AcquireExceptionObject);
   end;
 end;
 
