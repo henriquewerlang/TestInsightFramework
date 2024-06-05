@@ -488,6 +488,10 @@ begin
         Exit
       else
         raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
+{$IFDEF PAS2JS}
+    on JSError: TJSError do
+      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
+{$ENDIF}
   end;
 
   raise EAssertFail.Create('No exceptions raised!', Message);
