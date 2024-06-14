@@ -434,7 +434,7 @@ end;
 
 class procedure Assert.IsEmpty(const Value, Message: String);
 begin
-  if not Value.IsEmpty then
+  if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF} not Value.IsEmpty then
     raise EAssertFail.Create('The string must be empty!', Message);
 end;
 
@@ -452,7 +452,7 @@ end;
 
 class procedure Assert.IsNotEmpty(const Value, Message: String);
 begin
-  if Value.IsEmpty then
+  if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF}Value.IsEmpty then
     raise EAssertFail.Create('The string must not be empty!', Message);
 end;
 
