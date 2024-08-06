@@ -147,6 +147,8 @@ type
     [Test]
     procedure AsyncAssert;
     [Test]
+    procedure AsyncAssertOfAsyncAssert;
+    [Test]
     procedure Test3;
     [Test]
     procedure Test4;
@@ -319,6 +321,20 @@ begin
     begin
       FAssertCalled := True;
       Assert.IsTrue(True);
+    end);
+end;
+
+procedure TClassWithAsyncTest.AsyncAssertOfAsyncAssert;
+begin
+  Assert.Async(
+    procedure
+    begin
+      Assert.Async(
+        procedure
+        begin
+          FAssertCalled := True;
+          Assert.IsTrue(True);
+        end);
     end);
 end;
 

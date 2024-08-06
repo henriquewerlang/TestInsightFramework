@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}JSApi.JS{$ENDIF};
+uses System.SysUtils, System.Rtti, System.Generics.Collections, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}System.Timer, JSApi.JS{$ENDIF};
 
 type
   SetupAttribute = class(TCustomAttribute);
@@ -15,12 +15,7 @@ type
   TTestClassMethod = class;
   TTestInsightFramework = class;
 
-  EAsyncProcedure = class(Exception)
-  public
-    constructor Create;
-  end;
-
-  EAsyncAssert = class(EAsyncProcedure)
+  EAsyncAssert = class(Exception)
   private
     FAssertAsyncProcedure: TProc;
     FTimeOut: Integer;
@@ -377,7 +372,10 @@ end;
 
 procedure TTestInsightFramework.ShowException(const Error: TObject);
 begin
-  if Error is EAsyncProcedure then
+  if Error is EAbort then
+{$IFDEF DCC}
+    Error.Free
+{$ENDIF}
   else
     raise Error;
 end;
@@ -554,6 +552,10 @@ procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMeth
       SuccessProcedure;
   end;
 
+var
+  ExceptionObject: TObject;
+  RaiseAgain: Boolean;
+
 begin
   try
     if Assigned(Method) then
@@ -565,21 +567,18 @@ begin
             procedure
             begin
               ExecuteSuccess;
+
+              NextProcedure;
+
+              ContinueTesting;
             end)
           .Catch(
             procedure (Exception: TObject)
             begin
               CheckException(Exception);
-            end)
-          .&Then(
-            procedure
-            begin
-              NextProcedure;
-
-              ContinueTesting;
             end);
 
-        raise EAsyncProcedure.Create;
+        Abort;
       end
       else
 {$ENDIF}
@@ -587,7 +586,13 @@ begin
 
     ExecuteSuccess;
   except
-    CheckException(AcquireExceptionObject);
+    ExceptionObject := AcquireExceptionObject;
+    RaiseAgain := (ExceptionObject is EAsyncAssert) or (ExceptionObject is EAbort);
+
+    CheckException(ExceptionObject);
+
+    if RaiseAgain then
+      Abort;
   end;
 
   NextProcedure;
@@ -598,50 +603,41 @@ var
   AssertAsync: EAsyncAssert absolute ExceptionObject;
   Error: Exception absolute ExceptionObject;
   TestFail: EAssertFail absolute ExceptionObject;
+  Timer: TTimer;
 {$IFDEF PAS2JS}
   JSErro: TJSError absolute ExceptionObject;
   JSMessage: String absolute ExceptionObject;
 {$ENDIF}
 
 begin
-  if ExceptionObject is EAsyncProcedure then
-  begin
+  try
     if ExceptionObject is EAsyncAssert then
     begin
       FAssertAsyncProcedure := AssertAsync.AssertAsyncProcedure;
 
-{$IFDEF DCC}
-      var Timer := TTimer.Create(nil);
+      Timer := TTimer.Create(nil);
       Timer.Interval := AssertAsync.TimeOut;
       Timer.OnTimer := OnTimerAssertAsync;
-{$ELSE}
-      Window.SetTimeOut(
-        procedure
-        begin
-          OnTimerAssertAsync(nil);
-        end, AssertAsync.TimeOut);
-{$ENDIF}
-    end;
-
-    raise ExceptionObject;
-  end
+    end
+    else if ExceptionObject is EAbort then
+    else if ExceptionObject is EAssertFail then
+      FinishMethodTestExecutionFail(TestFail.Message)
 {$IFDEF PAS2JS}
-  else if JSValue(ExceptionObject) is TJSError then
-    FinishMethodTestExecutionError(JSErro.Message)
-  else if isString(ExceptionObject) then
-    FinishMethodTestExecutionError(JSMessage)
+    else if JSValue(ExceptionObject) is TJSError then
+      FinishMethodTestExecutionError(JSErro.Message)
+    else if isString(ExceptionObject) then
+      FinishMethodTestExecutionError(JSMessage)
 {$ENDIF}
-  else if ExceptionObject is EAssertFail then
-    FinishMethodTestExecutionFail(TestFail.Message)
-  else if ExceptionObject is Exception then
-    if Error.Message.IsEmpty then
-      FinishMethodTestExecutionError(Error.QualifiedClassName)
-    else
-      FinishMethodTestExecutionError(Error.Message);
-
+    else if ExceptionObject is Exception then
+      if Error.Message.IsEmpty then
+        FinishMethodTestExecutionError(Error.QualifiedClassName)
+      else
+        FinishMethodTestExecutionError(Error.Message);
+  finally
 {$IFDEF DCC}
-  ExceptionObject.Free;
+    ExceptionObject.Free;
 {$ENDIF}
+  end;
 end;
 
 procedure TTestClass.ContinueTesting;
@@ -754,13 +750,13 @@ end;
 procedure TTestClass.OnTimerAssertAsync(Sender: TObject);
 var
   ExecutEAsyncAssertMethod: TRttiMethod;
+  Timer: TTimer absolute Sender;
 
 begin
   ExecutEAsyncAssertMethod := FTester.Context.GetType(ClassType).GetMethod('ExecutEAsyncAssert');
+  Timer.Enabled := False;
 
-{$IFDEF DCC}
-  Sender.Free;
-{$ENDIF}
+  Timer.Free;
 
   try
     ExecuteTestMethod(Self, ExecutEAsyncAssertMethod);
@@ -785,7 +781,7 @@ end;
 
 constructor EAsyncAssert.Create(const AssertAsyncProcedure: TProc; const TimeOut: Integer);
 begin
-  inherited Create;
+  inherited Create('Async Assert');
 
   FAssertAsyncProcedure := AssertAsyncProcedure;
   FTimeOut := TimeOut;
@@ -806,13 +802,6 @@ begin
     inherited Create(AssertionMessage)
   else
     inherited CreateFmt('%s, Message: %s', [AssertionMessage, Message]);
-end;
-
-{ EAsyncProcedure }
-
-constructor EAsyncProcedure.Create;
-begin
-  inherited Create('Async procedure');
 end;
 
 end.

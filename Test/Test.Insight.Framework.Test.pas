@@ -104,6 +104,8 @@ type
     procedure WhenAnInheritedClassHasSetupAndTearDownMethodsMustCallOnlyTheMethodsInTheHigherClassInheritance;
     [Test]
     procedure WhenTerminateTheExecutionMustCallOnTerminateEvent;
+    [Test]
+    procedure WhenAAsyncProcedureHasAnotherAsyncAssertionTheTestMustExecuteAllAssertions;
   end;
 
   [TestFixture]
@@ -204,7 +206,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 32;
+  TEST_COUNT = 33;
 
 { TAssertTest }
 
@@ -650,6 +652,22 @@ begin
 
     Sleep(10);
   end;
+end;
+
+procedure TTestInsightFrameworkTest.WhenAAsyncProcedureHasAnotherAsyncAssertionTheTestMustExecuteAllAssertions;
+begin
+  TClassWithAsyncTest.AssertCalled := False;
+  var TestName := 'Test.Insight.Framework.Classes.Test.TClassWithAsyncTest.AsyncAssertOfAsyncAssert';
+
+  FClient.Tests := [TestName];
+
+  ExecuteTests;
+
+  Assert.IsFalse(TClassWithAsyncTest.AssertCalled);
+
+  WaitForTimer;
+
+  Assert.IsTrue(TClassWithAsyncTest.AssertCalled);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAClassInheritesTheSetupFixtureMustCallOnlyOneTimeTheFunction;
