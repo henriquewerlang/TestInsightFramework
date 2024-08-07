@@ -552,10 +552,6 @@ procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMeth
       SuccessProcedure;
   end;
 
-var
-  ExceptionObject: TObject;
-  RaiseAgain: Boolean;
-
 begin
   try
     if Assigned(Method) then
@@ -567,7 +563,15 @@ begin
             procedure
             begin
               ExecuteSuccess;
-
+            end)
+          .Catch(
+            procedure (Exception: TObject)
+            begin
+              CheckException(Exception);
+            end)
+          .&Then(
+            procedure
+            begin
               NextProcedure;
 
               ContinueTesting;
@@ -575,7 +579,7 @@ begin
           .Catch(
             procedure (Exception: TObject)
             begin
-              CheckException(Exception);
+              FTester.ShowException(Exception);
             end);
 
         Abort;
@@ -586,13 +590,7 @@ begin
 
     ExecuteSuccess;
   except
-    ExceptionObject := AcquireExceptionObject;
-    RaiseAgain := (ExceptionObject is EAsyncAssert) or (ExceptionObject is EAbort);
-
-    CheckException(ExceptionObject);
-
-    if RaiseAgain then
-      Abort;
+    CheckException(AcquireExceptionObject);
   end;
 
   NextProcedure;
@@ -618,8 +616,11 @@ begin
       Timer := TTimer.Create(nil);
       Timer.Interval := AssertAsync.TimeOut;
       Timer.OnTimer := OnTimerAssertAsync;
+
+      Abort;
     end
     else if ExceptionObject is EAbort then
+      Abort
     else if ExceptionObject is EAssertFail then
       FinishMethodTestExecutionFail(TestFail.Message)
 {$IFDEF PAS2JS}
