@@ -210,9 +210,8 @@ end;
 procedure TTestInsightFramework.DoExecuteTests;
 begin
   try
-    repeat
+    while not FTestQueue.IsEmpty do
       FTestQueue.Peek.Execute;
-    until FTestQueue.IsEmpty;
 
     FinishTestExecution;
   except
