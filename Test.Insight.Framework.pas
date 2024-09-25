@@ -138,9 +138,18 @@ type
   end;
 
   Assert = class
+  private
+    class procedure RaiseAssert(const Expected, CurrentValue: TValue; const Message: String);
   public
-    class procedure AreEqual(const Expected, CurrentValue: String; const Message: String = ''); overload; // compiler problem...
-    class procedure AreEqual<T>(const Expected, CurrentValue: T; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: Integer; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: Int64; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: Extended; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: String; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: Pointer; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: TClass; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: TDateTime; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: TObject; const Message: String = ''); overload;
+    class procedure AreEqual(const Expected, CurrentValue: Variant; const Message: String = ''); overload;
     class procedure Async(const Proc: TProc; const TimeOut: Integer = 100; const Message: String = '');
     class procedure CheckExpectation(const Expectation: String; const Message: String = '');
     class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = '');
@@ -401,14 +410,38 @@ end;
 class procedure Assert.AreEqual(const Expected, CurrentValue, Message: String);
 begin
   if Expected <> CurrentValue then
-    raise EAssertFail.Create(Format('The value expected is %s and the current value is %s', [Expected, CurrentValue]), Message);
+    RaiseAssert(Expected, CurrentValue, Message);
 end;
 
-class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T; const Message: String);
+class procedure Assert.AreEqual(const Expected, CurrentValue: Integer; const Message: String);
 begin
   if Expected <> CurrentValue then
-    raise EAssertFail.Create(Format('The value expected is %s and the current value is %s', [TValue.From<T>(Expected).ToString, TValue.From<T>(CurrentValue).ToString]), Message);
+    RaiseAssert(Expected, CurrentValue, Message);
 end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: Int64; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: Extended; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: TDateTime; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: TObject; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
+ end;
 
 class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer; const Message: String);
 begin
@@ -466,6 +499,11 @@ begin
     raise EAssertFail.Create('A TRUE value is expected!', Message);
 end;
 
+class procedure Assert.RaiseAssert(const Expected, CurrentValue: TValue; const Message: String);
+begin
+  raise EAssertFail.Create(Format('The value expected is %s and the current value is %s', [Expected.ToString, CurrentValue.ToString]), Message);
+end;
+
 class procedure Assert.StartWith(const Expected, Value, Message: String);
 begin
   if not Value.StartsWith(Expected) then
@@ -503,6 +541,24 @@ begin
   end;
 
   raise EAssertFail.Create('No exceptions raised!', Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: Variant; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(TValue.FromVariant(Expected), TValue.FromVariant(CurrentValue), Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: TClass; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
+end;
+
+class procedure Assert.AreEqual(const Expected, CurrentValue: Pointer; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(Expected, CurrentValue, Message);
 end;
 
 { TTestClassMethod }
