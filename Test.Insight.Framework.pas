@@ -149,7 +149,10 @@ type
     class procedure AreEqual(const Expected, CurrentValue: TClass; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TDateTime; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TObject; const Message: String = ''); overload;
+{$IFDEF DCC}
     class procedure AreEqual(const Expected, CurrentValue: Variant; const Message: String = ''); overload;
+{$ENDIF}
+    class procedure AreEqual<T>(const Expected, CurrentValue: T; const Message: String = ''); overload;
     class procedure Async(const Proc: TProc; const TimeOut: Integer = 100; const Message: String = '');
     class procedure CheckExpectation(const Expectation: String; const Message: String = '');
     class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = '');
@@ -409,37 +412,37 @@ end;
 class procedure Assert.AreEqual(const Expected, CurrentValue, Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Integer; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Int64; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Extended; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TDateTime; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TObject; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
  end;
 
 class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer; const Message: String);
@@ -542,22 +545,30 @@ begin
   raise EAssertFail.Create('No exceptions raised!', Message);
 end;
 
+{$IFDEF DCC}
 class procedure Assert.AreEqual(const Expected, CurrentValue: Variant; const Message: String);
 begin
   if Expected <> CurrentValue then
     RaiseAssert(TValue.FromVariant(Expected), TValue.FromVariant(CurrentValue), Message);
 end;
+{$ENDIF}
+
+class procedure Assert.AreEqual<T>(const Expected, CurrentValue: T; const Message: String);
+begin
+  if Expected <> CurrentValue then
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TClass; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Pointer; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(Expected, CurrentValue, Message);
+    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
 end;
 
 { TTestClassMethod }
