@@ -15,6 +15,10 @@ type
   TTestClassMethod = class;
   TTestInsightFramework = class;
 
+{$IFDEF PAS2JS}
+    Variant = JSValue;
+{$ENDIF}
+
   EAsyncAssert = class(Exception)
   private
     FAssertAsyncProcedure: TProc;
@@ -149,9 +153,7 @@ type
     class procedure AreEqual(const Expected, CurrentValue: TClass; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TDateTime; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TObject; const Message: String = ''); overload;
-{$IFDEF DCC}
     class procedure AreEqual(const Expected, CurrentValue: Variant; const Message: String = ''); overload;
-{$ENDIF}
     class procedure Async(const Proc: TProc; const TimeOut: Integer = 100; const Message: String = '');
     class procedure CheckExpectation(const Expectation: String; const Message: String = '');
     class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = '');
@@ -544,13 +546,11 @@ begin
   raise EAssertFail.Create('No exceptions raised!', Message);
 end;
 
-{$IFDEF DCC}
 class procedure Assert.AreEqual(const Expected, CurrentValue: Variant; const Message: String);
 begin
   if Expected <> CurrentValue then
-    RaiseAssert(TValue.FromVariant(Expected), TValue.FromVariant(CurrentValue), Message);
+    RaiseAssert(TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(Expected), TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(CurrentValue), Message);
 end;
-{$ENDIF}
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TClass; const Message: String);
 begin
