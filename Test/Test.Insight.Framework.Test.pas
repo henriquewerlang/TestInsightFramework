@@ -106,6 +106,10 @@ type
     procedure WhenTerminateTheExecutionMustCallOnTerminateEvent;
     [Test]
     procedure WhenAAsyncProcedureHasAnotherAsyncAssertionTheTestMustExecuteAllAssertions;
+    [Test]
+    procedure WhenTheUseTheSetupFixtureDelayMustWaitForTheSetupExecution;
+    [Test]
+    procedure WhenTheUseTheSetupDelayMustWaitForTheTestExecution;
   end;
 
   [TestFixture]
@@ -206,7 +210,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 33;
+  TEST_COUNT = 34;
 
 { TAssertTest }
 
@@ -993,6 +997,46 @@ begin
   var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual(TResultType.Skipped, TestResult.ResultType);
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheUseTheSetupDelayMustWaitForTheTestExecution;
+begin
+  TClassDelayed.SetupCalled := False;
+  TClassDelayed.TestCalled := False;
+
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassDelayed.Test'];
+
+  ExecuteTests;
+
+  Sleep(15);
+
+  Application.ProcessMessages;
+
+  Assert.IsTrue(TClassDelayed.SetupCalled);
+  Assert.IsFalse(TClassDelayed.TestCalled);
+
+  Sleep(15);
+
+  Application.ProcessMessages;
+
+  Assert.IsTrue(TClassDelayed.TestCalled);
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheUseTheSetupFixtureDelayMustWaitForTheSetupExecution;
+begin
+  TClassDelayed.SetupCalled := False;
+  TClassDelayed.SetupFixtureCalled := False;
+
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassDelayed.Test'];
+
+  ExecuteTests;
+
+  Assert.IsTrue(TClassDelayed.SetupFixtureCalled);
+  Assert.IsFalse(TClassDelayed.SetupCalled);
+
+  WaitForTimer;
+
+  Assert.IsTrue(TClassDelayed.SetupCalled);
 end;
 
 { TTestInsightClientMock }
