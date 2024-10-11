@@ -73,6 +73,11 @@ type
     constructor Create(const AssertionMessage, Message: String); reintroduce;
   end;
 
+  EStopExecution = class(Exception)
+  public
+    constructor Create;
+  end;
+
   TObjectProcedure = class
   private
     FProc: TProc;
@@ -224,6 +229,10 @@ var
   AcquireExceptionObject: TObject; external name '$e';
 {$ENDIF}
 
+procedure StopExecution;
+begin
+  raise EStopExecution.Create;
+end;
 
 { TTestInsightFramework }
 
@@ -417,7 +426,7 @@ end;
 
 procedure TTestInsightFramework.ShowException(const Error: TObject);
 begin
-  if Error is EAbort then
+  if Error is EStopExecution then
 {$IFDEF DCC}
     Error.Free
 {$ENDIF}
@@ -702,7 +711,7 @@ begin
               FTester.ShowException(Exception);
             end);
 
-        Abort;
+        StopExecution;
       end
       else
 {$ENDIF}
@@ -730,8 +739,8 @@ begin
   try
     if ExceptionObject is EAsyncAssert then
       CreateAsyncTimer(AssertAsync.AssertAsyncProcedure, {$IFDEF PAS2JS}@{$ENDIF}OnTimerAssertAsync, AssertAsync.TimeOut)
-    else if ExceptionObject is EAbort then
-      Abort
+    else if ExceptionObject is EStopExecution then
+      StopExecution
     else if ExceptionObject is EAssertFail then
       FinishMethodTestExecutionFail(TestFail.Message)
 {$IFDEF PAS2JS}
@@ -782,7 +791,7 @@ begin
   Timer.Interval := Interval;
   Timer.OnTimer := TimerEvent;
 
-  Abort;
+  StopExecution;
 end;
 
 destructor TTestClass.Destroy;
@@ -1014,6 +1023,13 @@ end;
 procedure TObjectProcedure.Execute;
 begin
   FProc();
+end;
+
+{ EStopExecution }
+
+constructor EStopExecution.Create;
+begin
+  inherited Create('Stop the execution.');
 end;
 
 end.
