@@ -8,6 +8,15 @@ type
   EIgnoreDebugError = class(Exception);
 
   [TestFixture]
+  TMyClassTest = class
+  public
+    [Test]
+    procedure Test;
+    [Test]
+    procedure Test2;
+  end;
+
+  [TestFixture]
   TClassWithSetupError = class
   public
     class var SetupFixtureRaiseError: Boolean;
@@ -19,15 +28,6 @@ type
     procedure TearDownFixture;
     [Test]
     procedure Test;
-  end;
-
-  [TestFixture]
-  TMyClassTest = class
-  public
-    [Test]
-    procedure Test;
-    [Test]
-    procedure Test2;
   end;
 
   [TestFixture]

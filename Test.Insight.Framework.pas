@@ -105,6 +105,7 @@ type
     procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CheckException(ExceptionObject: TObject);
+    procedure ClassRegisterMethodsFinished;
     procedure ContinueTesting;
     procedure CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
     procedure ExecuteSetupFixture;
@@ -118,7 +119,6 @@ type
     procedure LoadSetupAndTearDownMethods;
     procedure OnTimerAssertAsync(Sender: TObject);
     procedure OnTimerDelayProcedure(Sender: TObject);
-    procedure RegisterFinishTestExecution;
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
 
     property Instance: TObject read FInstance;
@@ -351,7 +351,9 @@ end;
 procedure TTestInsightFramework.FinishTestMethodExecutionPostResult;
 begin
   if FTestStartedTime > 0 then
-    FTestResult.Duration := MilliSecondsBetween(Now, FTestStartedTime);
+    FTestResult.Duration := MilliSecondsBetween(Now, FTestStartedTime)
+  else
+    FTestResult.Duration := 0;
 
   PostTestResult;
 end;
@@ -387,8 +389,10 @@ var
 
   procedure DiscoveryAllTests;
   var
+    RttiMethod: TRttiMethod;
     RttiType: TRttiType;
-    TestMethod: TRttiMethod;
+    TestMethod: TTestClassMethod;
+    WillExecute: Boolean;
 
   begin
     ExecuteTests := FTestInsightClient.Options.ExecuteTests;
@@ -403,20 +407,28 @@ var
 
         FTestQueue.Enqueue(TestClass);
 
-        for TestMethod in RttiType.GetMethods do
-          if TestMethod.HasAttribute<TestAttribute> then
+        for RttiMethod in RttiType.GetMethods do
+          if RttiMethod.HasAttribute<TestAttribute> then
           begin
-            FillTestResult(TestClass.AddTestMethod(TestMethod, CanExecuteTest(TestMethod.Name)));
+            WillExecute := CanExecuteTest(RttiMethod.Name);
 
-            PostTestResult;
+            TestMethod := TestClass.AddTestMethod(RttiMethod, WillExecute);
+
+            if not WillExecute then
+            begin
+              FillTestResult(TestMethod);
+
+              PostTestResult;
+            end;
+
+            Inc(FTestCount);
           end;
 
-        TestClass.RegisterFinishTestExecution;
+        TestClass.ClassRegisterMethodsFinished;
       end;
   end;
 
 begin
-
   DiscoveryAllTests;
 
   FTestInsightClient.StartedTesting(TestCount);
@@ -652,8 +664,6 @@ begin
 
     FQueueMethods.Enqueue(TObjectProcedure.Create(TestMethod.TearDown));
   end;
-
-  Inc(FTester.FTestCount);
 end;
 
 procedure TTestClass.CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc);
@@ -759,6 +769,14 @@ begin
     ExceptionObject.Free;
 {$ENDIF}
   end;
+end;
+
+procedure TTestClass.ClassRegisterMethodsFinished;
+begin
+  if not FQueueMethods.IsEmpty then
+    FQueueMethods.Enqueue(TObjectProcedure.Create(ExecuteTearDownFixture));
+
+  FQueueMethods.Enqueue(TObjectProcedure.Create(FinishClassTestExecution));
 end;
 
 procedure TTestClass.ContinueTesting;
@@ -912,14 +930,6 @@ begin
   except
     FTester.ShowException(AcquireExceptionObject);
   end;
-end;
-
-procedure TTestClass.RegisterFinishTestExecution;
-begin
-  if not FQueueMethods.IsEmpty then
-    FQueueMethods.Enqueue(TObjectProcedure.Create(ExecuteTearDownFixture));
-
-  FQueueMethods.Enqueue(TObjectProcedure.Create(FinishClassTestExecution));
 end;
 
 procedure TTestClass.StartMethodTestExecution(const TestMethod: TTestClassMethod);
