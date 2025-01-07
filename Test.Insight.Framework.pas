@@ -801,13 +801,24 @@ end;
 procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
 var
   Timer: TTimer;
+  Handle: NativeInt;
 
 begin
   FAsyncProcedure := AsyncProcedure;
 
+{$IFDEF PAS2JS}
+  Handle := Window.requestIdleCallback(
+    procedure (IdleDeadline: TJSIdleDeadline)
+    begin
+      Window.CancelIdleCallback(Handle);
+
+{$ENDIF}
   Timer := TTimer.Create(nil);
   Timer.Interval := Interval;
   Timer.OnTimer := TimerEvent;
+{$IFDEF PAS2JS}
+    end);
+{$ENDIF}
 
   StopExecution;
 end;
