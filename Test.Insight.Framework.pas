@@ -801,7 +801,9 @@ end;
 procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
 var
   Timer: TTimer;
+{$IFDEF PAS2JS}
   Handle: NativeInt;
+{$ENDIF}
 
 begin
   FAsyncProcedure := AsyncProcedure;
