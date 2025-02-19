@@ -2,7 +2,7 @@
 
 interface
 
-uses System.SysUtils, System.Rtti, System.Generics.Collections, System.Classes, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ENDIF}{$IFDEF PAS2JS}System.Timer, JSApi.JS{$ENDIF};
+uses System.SysUtils, System.Rtti, System.Generics.Collections, System.Classes, TestInsight.Client, {$IFDEF DCC}Vcl.ExtCtrls{$ELSE}System.Timer, JSApi.JS{$ENDIF};
 
 type
 {$IFDEF PAS2JS}
@@ -807,28 +807,28 @@ end;
 
 procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
 var
-  Timer: TTimer;
 {$IFDEF PAS2JS}
-  Handle: NativeInt;
+  AsyncPromise: TJSPromise;
 {$ENDIF}
-
+  Timer: TTimer;
 begin
   FAsyncProcedure := AsyncProcedure;
-
-{$IFDEF PAS2JS}
-  Handle := Window.requestIdleCallback(
-    procedure (IdleDeadline: TJSIdleDeadline)
-    begin
-      Window.CancelIdleCallback(Handle);
-
-{$ENDIF}
   Timer := TTimer.Create(nil);
   Timer.Interval := Interval;
   Timer.OnTimer := TimerEvent;
-{$IFDEF PAS2JS}
-    end);
-{$ENDIF}
 
+{$IFDEF PAS2JS}
+  asm
+    AsyncPromise = Promise.waitForAll();
+  end;
+
+  AsyncPromise.then(
+    procedure
+    begin
+      TimerEvent(Timer);
+    end);
+
+{$ENDIF}
   StopExecution;
 end;
 
@@ -845,7 +845,10 @@ end;
 
 procedure TTestClass.ExecutAsyncProcedure;
 begin
-  FAsyncProcedure();
+  if Assigned(FAsyncProcedure) then
+    FAsyncProcedure();
+
+  FAsyncProcedure := nil;
 end;
 
 procedure TTestClass.Execute;
@@ -946,7 +949,7 @@ begin
   FreeTimer(Sender);
 
   try
-    FAsyncProcedure();
+    ExecutAsyncProcedure;
   except
     FTester.ShowException(AcquireExceptionObject);
   end;
@@ -1061,6 +1064,39 @@ constructor EStopExecution.Create;
 begin
   inherited Create('Stop the execution.');
 end;
+
+{$IFDEF PAS2JS}
+initialization
+asm
+  class TestInsightPromise extends Promise {
+    static PromiseList = [];
+    static PromiseWaiting = [];
+
+    constructor (resolver, ignoreList) {
+      super(resolver);
+
+      if (TestInsightPromise.PromiseList)
+        TestInsightPromise.PromiseList.push(this);
+      else
+        TestInsightPromise.PromiseList = [];
+    }
+
+    static async waitForAll()
+    {
+      if (TestInsightPromise.PromiseList.length > 0)
+      {
+        TestInsightPromise.PromiseWaiting = TestInsightPromise.PromiseList;
+
+        TestInsightPromise.PromiseList = null;
+
+        await TestInsightPromise.allSettled(TestInsightPromise.PromiseWaiting);
+      }
+    }
+  };
+
+  Promise = TestInsightPromise;
+end;
+{$ENDIF}
 
 end.
 
