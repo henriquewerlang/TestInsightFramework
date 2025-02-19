@@ -6,7 +6,7 @@ uses System.SysUtils, System.Rtti, System.Generics.Collections, System.Classes, 
 
 type
 {$IFDEF PAS2JS}
-    Variant = JSValue;
+  Variant = JSValue;
 {$ENDIF}
 
   TDelayedProcedureAttribute = class(TCustomAttribute)
@@ -115,11 +115,14 @@ type
     procedure FinishMethodTestExecutionError(const Message: String);
     procedure FinishMethodTestExecutionFail(const Message: String);
     procedure FinishMethodTestExecutionPassed;
-    procedure FreeTimer(const Sender: TObject);
     procedure LoadSetupAndTearDownMethods;
     procedure OnTimerAssertAsync(Sender: TObject);
     procedure OnTimerDelayProcedure(Sender: TObject);
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
+
+    class function CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
+
+    class procedure FreeTimer(const Sender: TObject);
 
     property Instance: TObject read FInstance;
   public
@@ -221,6 +224,8 @@ type
     class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass; const Message: String = '');
   end;
 
+procedure WaitForPromises(const WaitFor: Integer = 5000);{$IFDEF PAS2JS} async;{$ENDIF}
+
 implementation
 
 uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.Web{$ENDIF};
@@ -233,6 +238,34 @@ var
 procedure StopExecution;
 begin
   raise EStopExecution.Create;
+end;
+
+procedure WaitForPromises(const WaitFor: Integer);
+{$IFDEF PAS2JS}
+var
+  ContinuePromise: TJSPromiseResolvers;
+  Timer: TTimer;
+  WaitingPromise: TJSPromise;
+
+  procedure ResolvePromise;
+  begin
+    TTestClass.FreeTimer(Timer);
+
+    ContinuePromise.Resolve;
+  end;
+
+{$ENDIF}
+begin
+{$IFDEF PAS2JS}
+  ContinuePromise := TJSPromise.withResolvers;
+  Timer := TTestClass.CreateTimer(WaitFor, TNotifyEvent(@ResolvePromise));
+
+  asm
+    WaitingPromise = Promise.waitForAll();
+  end;
+
+  await(TJSPromise.Any([WaitingPromise, ContinuePromise.Promise]));
+{$ENDIF}
 end;
 
 { TTestInsightFramework }
@@ -809,29 +842,23 @@ end;
 
 procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
 var
-{$IFDEF PAS2JS}
-  AsyncPromise: TJSPromise;
-{$ENDIF}
   Timer: TTimer;
+
 begin
   FAsyncProcedure := AsyncProcedure;
-  Timer := TTimer.Create(nil);
-  Timer.Interval := Interval;
-  Timer.OnTimer := TimerEvent;
+  Timer := CreateTimer(Interval, TimerEvent);
 
-{$IFDEF PAS2JS}
-  asm
-    AsyncPromise = Promise.waitForAll();
-  end;
-
-  AsyncPromise.then(
-    procedure
-    begin
-      TimerEvent(Timer);
-    end);
-
-{$ENDIF}
   StopExecution;
+end;
+
+class function TTestClass.CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
+begin
+  Result := TTimer.Create(nil);
+  Result.Enabled := False;
+  Result.Interval := Interval;
+  Result.OnTimer := OnTimer;
+
+  Result.Enabled := True;
 end;
 
 destructor TTestClass.Destroy;
@@ -847,10 +874,7 @@ end;
 
 procedure TTestClass.ExecutAsyncProcedure;
 begin
-  if Assigned(FAsyncProcedure) then
-    FAsyncProcedure();
-
-  FAsyncProcedure := nil;
+  FAsyncProcedure();
 end;
 
 procedure TTestClass.Execute;
@@ -907,7 +931,7 @@ begin
   FTester.FinishTestMethodExecutionPassed;
 end;
 
-procedure TTestClass.FreeTimer(const Sender: TObject);
+class procedure TTestClass.FreeTimer(const Sender: TObject);
 var
   Timer: TTimer absolute Sender;
 
@@ -1085,7 +1109,7 @@ asm
 
     static async waitForAll()
     {
-      if (TestInsightPromise.PromiseList.length > 0)
+      while (TestInsightPromise.PromiseList && TestInsightPromise.PromiseList.length > 0)
       {
         TestInsightPromise.PromiseWaiting = TestInsightPromise.PromiseList;
 
