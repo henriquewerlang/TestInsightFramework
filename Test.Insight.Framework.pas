@@ -264,6 +264,8 @@ end;
 
 destructor TTestInsightFramework.Destroy;
 begin
+  FContext.Free;
+
   FTestQueue.Free;
 
   FTestClasses.Free;
