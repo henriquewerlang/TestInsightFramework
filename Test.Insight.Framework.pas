@@ -841,12 +841,10 @@ begin
 end;
 
 procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
-var
-  Timer: TTimer;
-
 begin
   FAsyncProcedure := AsyncProcedure;
-  Timer := CreateTimer(Interval, TimerEvent);
+
+  CreateTimer(Interval, TimerEvent);
 
   StopExecution;
 end;
