@@ -110,6 +110,10 @@ type
     procedure WhenTheUseTheSetupFixtureDelayMustWaitForTheSetupExecution;
     [Test]
     procedure WhenTheUseTheSetupDelayMustWaitForTheTestExecution;
+    [Test]
+    procedure BeforeExecuteATestMustMarkAsFalseTheAssertionExecution;
+    [Test]
+    procedure WhenAProcedureDontExecuteAnAssertionMustPostTheExectionWarning;
   end;
 
   [TestFixture]
@@ -173,6 +177,8 @@ type
     procedure WhenAssertTheIsNotEmptyMustRaiseAssertionErroIfTheStringIsEmpty;
     [Test]
     procedure WhenAssertTheIsNotEmptyMustNOtRaiseAssertionErroIfTheStringIsNotEmpty;
+    [Test]
+    procedure WhenTheAssertionIsCalledMustMarkTheGlobalInformationWithTrue;
   end;
 
   TTestInsightClientMock = class(TInterfacedObject, ITestInsightClient)
@@ -210,7 +216,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 34;
+  TEST_COUNT = 37;
 
 { TAssertTest }
 
@@ -424,6 +430,131 @@ begin
     end, EAssertFail);
 end;
 
+procedure TAssertTest.WhenTheAssertionIsCalledMustMarkTheGlobalInformationWithTrue;
+begin
+  var Assertions: TArray<TProc> :=
+    [
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(0, 0);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(Int64(0), Int64(0));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(0.0, 0.0);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual('a', 'a');
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(Pointer(nil), Pointer(nil));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(TClass(nil), TClass(nil));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(Now, Now);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(TObject(nil), TObject(nil));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.AreEqual(Variant(0), Variant(0));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.CheckExpectation(EmptyStr);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.GreaterThan(NativeInt(0), NativeInt(1));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.GreaterThan(Double(0), Double(1));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsEmpty(EmptyStr);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsFalse(False);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsNil(nil);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsNotEmpty('a');
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsNotNil(Pointer(1));
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.IsTrue(True);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.StartWith('a', 'a');
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.WillNotRaise(
+          procedure
+          begin
+
+          end);
+      end,
+      procedure
+      begin
+        Test.Insight.Framework.Assert.WillRaise(
+          procedure
+          begin
+            Abort;
+          end, EAbort);
+      end,
+      procedure
+      begin
+        // Async assertion
+        Test.Insight.Framework.Assert.AssertionCalled := True;
+      end
+    ];
+
+  var Context := TRttiContext.Create;
+  var AssertType := Context.GetType(Test.Insight.Framework.Assert);
+
+  Assert.AreEqual(Length(AssertType.GetDeclaredMethods), Length(Assertions), 'All the assertion procedures must have a single test here and must return a successfully execution!');
+
+  Assert.WillNotRaise(
+    procedure
+    begin
+      for var Proc in Assertions do
+        Proc();
+    end);
+
+  for var Proc in Assertions do
+  begin
+    Test.Insight.Framework.Assert.AssertionCalled := False;
+
+    Proc();
+
+    Assert.IsTrue(Test.Insight.Framework.Assert.AssertionCalled);
+  end;
+end;
+
 procedure TAssertTest.WhenTheExceptionRaiseInTheProcedureIsExpectedCantRaiseAssertError;
 begin
   Assert.WillNotRaise(
@@ -536,6 +667,17 @@ begin
   ExecuteTestsAndWait;
 
   Assert.EndsWith('FinishedTesting;', FClient.CalledProcedures);
+end;
+
+procedure TTestInsightFrameworkTest.BeforeExecuteATestMustMarkAsFalseTheAssertionExecution;
+begin
+  var TestName := 'Test.Insight.Framework.Classes.Test.TClassWithoutAssertionExecution.CheckAssertionExecutionIsFalse';
+
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithoutAssertionExecution.JustASimpleAssertion', TestName];
+
+  ExecuteTestsAndWait;
+
+  Assert.AreEqual(TResultType.Passed, FClient.PostedTests[TestName].ResultType);
 end;
 
 procedure TTestInsightFrameworkTest.BeforeStartTheTestMustCallTheSetupFixtureMethodOfTheExecutingClass;
@@ -796,6 +938,17 @@ begin
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.SetupFixtureCalled, 'Setup fixture');
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownCalled, 'Tear down');
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixtureCalled, 'Tear down fixture');
+end;
+
+procedure TTestInsightFrameworkTest.WhenAProcedureDontExecuteAnAssertionMustPostTheExectionWarning;
+begin
+  var TestName := 'Test.Insight.Framework.Classes.Test.TClassWithoutAssertionExecution.WithoutAssertion';
+
+  FClient.Tests := [TestName];
+
+  ExecuteTestsAndWait;
+
+  Assert.AreEqual(TResultType.Warning, FClient.PostedTests[TestName].ResultType);
 end;
 
 procedure TTestInsightFrameworkTest.WhenATestFailMustPostTheResultError;

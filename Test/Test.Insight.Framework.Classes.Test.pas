@@ -187,6 +187,17 @@ type
     class property TestCalled: Boolean read FTestCalled write FTestCalled;
   end;
 
+  [TestFixture]
+  TClassWithoutAssertionExecution = class
+  public
+    [Test]
+    procedure JustASimpleAssertion;
+    [Test]
+    procedure CheckAssertionExecutionIsFalse;
+    [Test]
+    procedure WithoutAssertion;
+  end;
+
 var
   WaitForTest: Boolean = False;
 
@@ -196,7 +207,7 @@ implementation
 
 procedure TMyClassTest.Test;
 begin
-
+  Assert.IsTrue(True);
 end;
 
 procedure TMyClassTest.Test2;
@@ -221,12 +232,12 @@ end;
 
 procedure TMyClassTest3.Test;
 begin
-
+  Assert.IsTrue(True);
 end;
 
 procedure TMyClassTest3.Test2;
 begin
-
+  Assert.IsTrue(True);
 end;
 
 { TClassWithoutTest }
@@ -455,6 +466,23 @@ end;
 procedure TClassDelayed.Test;
 begin
   TestCalled := True;
+end;
+
+{ TClassWithoutAssertionExecution }
+
+procedure TClassWithoutAssertionExecution.CheckAssertionExecutionIsFalse;
+begin
+  Assert.IsFalse(Assert.AssertionCalled);
+end;
+
+procedure TClassWithoutAssertionExecution.JustASimpleAssertion;
+begin
+  Assert.IsTrue(True);
+end;
+
+procedure TClassWithoutAssertionExecution.WithoutAssertion;
+begin
+  // No assertion
 end;
 
 end.

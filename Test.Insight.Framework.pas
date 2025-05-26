@@ -197,7 +197,10 @@ type
   end;
 
   Assert = class
+  private class var
+    FAssertionCalled: Boolean;
   private
+    class procedure ExecuteAssertion(const Proc: TProc);
     class procedure RaiseAssert(const Expected, CurrentValue: TValue; const Message: String);
   public
     class procedure AreEqual(const Expected, CurrentValue: Integer; const Message: String = ''); overload;
@@ -222,6 +225,8 @@ type
     class procedure StartWith(const Expected, Value: String; const Message: String = '');
     class procedure WillNotRaise(const Proc: TProc; const Message: String = '');
     class procedure WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass; const Message: String = '');
+
+    class property AssertionCalled: Boolean read FAssertionCalled write FAssertionCalled;
   end;
 
 procedure WaitForPromises(const WaitFor: Integer = 5000);{$IFDEF PAS2JS} async;{$ENDIF}
@@ -379,7 +384,10 @@ end;
 
 procedure TTestInsightFramework.FinishTestMethodExecutionPassed;
 begin
-  FTestResult.ResultType := TResultType.Passed;
+  if Assert.AssertionCalled then
+    FTestResult.ResultType := TResultType.Passed
+  else
+    FTestResult.ResultType := TResultType.Warning;
 
   FinishTestMethodExecutionPostResult;
 end;
@@ -497,38 +505,62 @@ end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue, Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Integer; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Int64; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Extended; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TDateTime; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TObject; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
  end;
 
 class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer; const Message: String);
@@ -541,56 +573,99 @@ end;
 
 class procedure Assert.CheckExpectation(const Expectation, Message: String);
 begin
-  if not Expectation.IsEmpty then
-    raise EAssertFail.Create(Format('Expectation not achieved [%s]', [Expectation]), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not Expectation.IsEmpty then
+        raise EAssertFail.Create(Format('Expectation not achieved [%s]', [Expectation]), Message);
+    end);
+end;
+
+class procedure Assert.ExecuteAssertion(const Proc: TProc);
+begin
+  AssertionCalled := True;
+
+  Proc();
 end;
 
 class procedure Assert.GreaterThan(const Expected, CurrentValue: Double; const Message: String);
 begin
-  if not (CurrentValue > Expected) then
-    raise EAssertFail.Create(Format('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not (CurrentValue > Expected) then
+        raise EAssertFail.Create(Format('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]), Message);
+    end);
 end;
 
 class procedure Assert.GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String);
 begin
-  if not (CurrentValue > Expected) then
-    raise EAssertFail.Create(Format('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not (CurrentValue > Expected) then
+        raise EAssertFail.Create(Format('The value must be greater than %s, current value %s!', [Expected.ToString, CurrentValue.ToString]), Message);
+    end);
 end;
 
 class procedure Assert.IsEmpty(const Value, Message: String);
 begin
-  if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF} not Value.IsEmpty then
-    raise EAssertFail.Create('The string must be empty!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF} not Value.IsEmpty then
+        raise EAssertFail.Create('The string must be empty!', Message);
+    end);
 end;
 
 class procedure Assert.IsFalse(const Value: Boolean; const Message: String);
 begin
-  if Value then
-    raise EAssertFail.Create('A FALSE value is expected!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Value then
+        raise EAssertFail.Create('A FALSE value is expected!', Message);
+    end);
 end;
 
 class procedure Assert.IsNil(const Value: Pointer; const Message: String);
 begin
-  if Assigned(Value) then
-    raise EAssertFail.Create('A nil pointer expected!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Assigned(Value) then
+        raise EAssertFail.Create('A nil pointer expected!', Message);
+    end);
 end;
 
 class procedure Assert.IsNotEmpty(const Value, Message: String);
 begin
-  if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF}Value.IsEmpty then
-    raise EAssertFail.Create('The string must not be empty!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if {$IFDEF PAS2JS}not IsString(Value) or {$ENDIF}Value.IsEmpty then
+        raise EAssertFail.Create('The string must not be empty!', Message);
+    end);
 end;
 
 class procedure Assert.IsNotNil(const Value: Pointer; const Message: String);
 begin
-  if not Assigned(Value) then
-    raise EAssertFail.Create('Not nil pointer expected!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not Assigned(Value) then
+        raise EAssertFail.Create('Not nil pointer expected!', Message);
+    end);
 end;
 
 class procedure Assert.IsTrue(const Value: Boolean; const Message: String);
 begin
-  if not Value then
-    raise EAssertFail.Create('A TRUE value is expected!', Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not Value then
+        raise EAssertFail.Create('A TRUE value is expected!', Message);
+    end);
 end;
 
 class procedure Assert.RaiseAssert(const Expected, CurrentValue: TValue; const Message: String);
@@ -600,59 +675,83 @@ end;
 
 class procedure Assert.StartWith(const Expected, Value, Message: String);
 begin
-  if not Value.StartsWith(Expected) then
-    raise EAssertFail.Create(Format('Expected start with "%s" but started with "%s"', [Expected, Value]), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if not Value.StartsWith(Expected) then
+        raise EAssertFail.Create(Format('Expected start with "%s" but started with "%s"', [Expected, Value]), Message);
+    end);
 end;
 
 class procedure Assert.WillNotRaise(const Proc: TProc; const Message: String);
 begin
-  try
-    Proc();
-  except
-    on Error: Exception do
-      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
-{$IFDEF PAS2JS}
-    on JSError: TJSError do
-      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
-{$ENDIF}
-  end;
+  ExecuteAssertion(
+    procedure
+    begin
+      try
+        Proc();
+      except
+        on Error: Exception do
+          raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
+    {$IFDEF PAS2JS}
+        on JSError: TJSError do
+          raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
+    {$ENDIF}
+      end;
+    end);
 end;
 
 class procedure Assert.WillRaise(const Proc: TProc; const ExceptionClass: ExceptClass; const Message: String);
 begin
-  try
-    Proc();
-  except
-    on Error: Exception do
-      if Error is ExceptionClass then
-        Exit
-      else
-        raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
-{$IFDEF PAS2JS}
-    on JSError: TJSError do
-      raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
-{$ENDIF}
-  end;
+  ExecuteAssertion(
+    procedure
+    begin
+      try
+        Proc();
+      except
+        on Error: Exception do
+          if Error is ExceptionClass then
+            Exit
+          else
+            raise EAssertFail.Create(Format('Unexpected exception raised %s!', [Error.ClassName]), Message);
+    {$IFDEF PAS2JS}
+        on JSError: TJSError do
+          raise EAssertFail.Create(Format('Unexpected exception raised %s!', [JSError.ToString]), Message);
+    {$ENDIF}
+      end;
 
-  raise EAssertFail.Create('No exceptions raised!', Message);
+      raise EAssertFail.Create('No exceptions raised!', Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Variant; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(Expected), TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(Expected), TValue.{$IFDEF PAS2JS}FromJSValue{$ELSE}FromVariant{$ENDIF}(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: TClass; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 class procedure Assert.AreEqual(const Expected, CurrentValue: Pointer; const Message: String);
 begin
-  if Expected <> CurrentValue then
-    RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+  ExecuteAssertion(
+    procedure
+    begin
+      if Expected <> CurrentValue then
+        RaiseAssert(TValue.From(Expected), TValue.From(CurrentValue), Message);
+    end);
 end;
 
 { TTestClassMethod }
@@ -667,6 +766,8 @@ end;
 
 procedure TTestClassMethod.ExecuteTest;
 begin
+  Assert.AssertionCalled := False;
+
   FTestClass.CallMethod(FTestMethod, FTestClass.FinishMethodTestExecutionPassed);
 end;
 
