@@ -100,6 +100,7 @@ type
     FTestSetup: TRttiMethod;
     FTestSetupFixture: TRttiMethod;
     FTestTearDown: TRttiMethod;
+    FTestTearDownTestClass: TRttiMethod;
     FTestTearDownFixture: TRttiMethod;
 
     procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
@@ -137,6 +138,7 @@ type
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
     procedure ExecutAsyncProcedure;
+    procedure ExecuteTearDown;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
   TTestClassMethod = class
@@ -229,7 +231,7 @@ type
     class property AssertionCalled: Boolean read FAssertionCalled write FAssertionCalled;
   end;
 
-procedure WaitForPromises(const WaitFor: Integer = 5000);{$IFDEF PAS2JS} async;{$ENDIF}
+procedure WaitForPromises(const Timeout: Integer = 5000);{$IFDEF PAS2JS} async;{$ENDIF}
 
 implementation
 
@@ -245,7 +247,7 @@ begin
   raise EStopExecution.Create;
 end;
 
-procedure WaitForPromises(const WaitFor: Integer);
+procedure WaitForPromises(const Timeout: Integer);
 {$IFDEF PAS2JS}
 var
   ContinuePromise: TJSPromiseResolvers;
@@ -259,17 +261,29 @@ var
     ContinuePromise.Resolve;
   end;
 
+  procedure RaiseError;
+  begin
+    TTestClass.FreeTimer(Timer);
+
+    raise Exception.Create('Timeout execution!');
+  end;
+
 {$ENDIF}
 begin
 {$IFDEF PAS2JS}
-  ContinuePromise := TJSPromise.withResolvers;
-  Timer := TTestClass.CreateTimer(WaitFor, TNotifyEvent(@ResolvePromise));
-
   asm
+    if (!Promise.hasPromises())
+      return;
+
+    ContinuePromise = Promise.continuePromise();
     WaitingPromise = Promise.waitForAll();
   end;
 
+  Timer := TTestClass.CreateTimer(Timeout, TNotifyEvent(@RaiseError));
+
   await(TJSPromise.Any([WaitingPromise, ContinuePromise.Promise]));
+
+  ResolvePromise;
 {$ENDIF}
 end;
 
@@ -780,7 +794,7 @@ end;
 
 procedure TTestClassMethod.TearDown;
 begin
-  FTestClass.CallMethod(FTestClass.FTestTearDown);
+  FTestClass.CallMethod(FTestClass, FTestClass.FTestTearDownTestClass);
 end;
 
 { TTestClass }
@@ -928,6 +942,9 @@ begin
 end;
 
 constructor TTestClass.Create(const Tester: TTestInsightFramework; const InstanceType: TRttiInstanceType);
+var
+  RttiType: TRttiType;
+
 begin
   inherited Create;
 
@@ -935,8 +952,10 @@ begin
   FQueueMethods := TQueue<TObjectProcedure>.Create;
   FTester := Tester;
   FTestMethods := TObjectList<TTestClassMethod>.Create;
+  RttiType := FTester.Context.GetType(ClassType);
 
-  FExecuteAsyncProcedureMethod := FTester.Context.GetType(ClassType).GetMethod('ExecutAsyncProcedure');
+  FExecuteAsyncProcedureMethod := RttiType.GetMethod('ExecutAsyncProcedure');
+  FTestTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
 
   LoadSetupAndTearDownMethods;
 end;
@@ -998,6 +1017,15 @@ begin
   FInstance := FTester.FObjectResolver(InstanceType);
 
   CallMethod(FTestSetupFixture);
+end;
+
+procedure TTestClass.ExecuteTearDown;
+begin
+  {$IFDEF PAS2JS}
+  await(WaitForPromises);
+  {$ENDIF}
+
+  CallMethod(FTestTearDown);
 end;
 
 procedure TTestClass.ExecuteTearDownFixture;
@@ -1195,27 +1223,58 @@ initialization
 asm
   class TestInsightPromise extends Promise {
     static PromiseList = [];
-    static PromiseWaiting = [];
+    static Promise = Promise;
 
-    constructor (resolver, ignoreList) {
-      super(resolver);
+    constructor (resolver) {
+      let MyResolve = null;
+      let MyReject = null;
 
-      if (TestInsightPromise.PromiseList)
-        TestInsightPromise.PromiseList.push(this);
-      else
+      super((resolve, reject) =>
+        {
+          MyResolve = resolve;
+          MyReject = reject;
+        });
+
+      resolver(
+        (value) =>
+          {
+            this.removeFromList();
+
+            MyResolve(value);
+          },
+        (value) =>
+          {
+            this.removeFromList();
+
+            MyReject(value);
+          }
+        );
+
+      if (!TestInsightPromise.PromiseList)
         TestInsightPromise.PromiseList = [];
+
+      TestInsightPromise.PromiseList.push(this);
+    }
+
+    removeFromList()
+    {
+      TestInsightPromise.PromiseList = TestInsightPromise.PromiseList.slice(TestInsightPromise.PromiseList.indexOf(this), 1);
+    }
+
+    static hasPromises()
+    {
+      return TestInsightPromise.PromiseList && TestInsightPromise.PromiseList.length > 0;
     }
 
     static async waitForAll()
     {
-      while (TestInsightPromise.PromiseList && TestInsightPromise.PromiseList.length > 0)
-      {
-        TestInsightPromise.PromiseWaiting = TestInsightPromise.PromiseList;
+      while (this.hasPromises())
+        await TestInsightPromise.Promise.allSettled(TestInsightPromise.PromiseList);
+    }
 
-        TestInsightPromise.PromiseList = null;
-
-        await TestInsightPromise.allSettled(TestInsightPromise.PromiseWaiting);
-      }
+    static continuePromise()
+    {
+      return TestInsightPromise.Promise.withResolvers();
     }
   };
 
