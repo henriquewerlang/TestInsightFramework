@@ -9,58 +9,23 @@ type
   Variant = JSValue;
 {$ENDIF}
 
-  TDelayedProcedureAttribute = class(TCustomAttribute)
-  private
-    FDelay: Integer;
-
-    constructor Create(const Delay: Integer);
-  public
-    property Delay: Integer read FDelay write FDelay;
-  end;
-
-  SetupAttribute = class(TDelayedProcedureAttribute);
-  SetupFixtureAttribute = class(TDelayedProcedureAttribute);
-  TearDownAttribute = class(TDelayedProcedureAttribute);
-  TearDownFixtureAttribute = class(TDelayedProcedureAttribute);
+  SetupAttribute = class(TCustomAttribute);
+  SetupFixtureAttribute = class(TCustomAttribute);
+  TearDownAttribute = class(TCustomAttribute);
+  TearDownFixtureAttribute = class(TCustomAttribute);
   TestAttribute = class(TCustomAttribute);
   TestFixtureAttribute = class(TCustomAttribute);
   TObjectResolver = TFunc<TRttiInstanceType, TObject>;
   TTestClassMethod = class;
   TTestInsightFramework = class;
 
-  SetupDelayAttribute = class(SetupAttribute)
-  public
-    constructor Create; overload;
-    constructor Create(const Delay: Integer); overload;
-  end;
-
-  SetupFixtureDelayAttribute = class(SetupFixtureAttribute)
-  public
-    constructor Create; overload;
-    constructor Create(const Delay: Integer); overload;
-  end;
-
-  TearDownDelayAttribute = class(TearDownAttribute)
-  public
-    constructor Create; overload;
-    constructor Create(const Delay: Integer); overload;
-  end;
-
-  TearDownFixtureDelayAttribute = class(TearDownFixtureAttribute)
-  public
-    constructor Create; overload;
-    constructor Create(const Delay: Integer); overload;
-  end;
-
   EAsyncAssert = class(Exception)
   private
     FAssertAsyncProcedure: TProc;
-    FTimeOut: Integer;
   public
-    constructor Create(const AssertAsyncProcedure: TProc; const TimeOut: Integer);
+    constructor Create(const AssertAsyncProcedure: TProc);
 
     property AssertAsyncProcedure: TProc read FAssertAsyncProcedure;
-    property TimeOut: Integer read FTimeOut;
   end;
 
   EAsyncAssertEmptyProcedure = class(Exception)
@@ -108,7 +73,6 @@ type
     procedure CheckException(ExceptionObject: TObject);
     procedure ClassRegisterMethodsFinished;
     procedure ContinueTesting;
-    procedure CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
     procedure ExecuteSetupFixture;
     procedure ExecuteTearDownFixture;
     procedure ExecuteTestMethod(const Instance: TObject; const TestMethod: TRttiMethod);
@@ -117,8 +81,6 @@ type
     procedure FinishMethodTestExecutionFail(const Message: String);
     procedure FinishMethodTestExecutionPassed;
     procedure LoadSetupAndTearDownMethods;
-    procedure OnTimerAssertAsync(Sender: TObject);
-    procedure OnTimerDelayProcedure(Sender: TObject);
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
 
     class function CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
@@ -214,7 +176,7 @@ type
     class procedure AreEqual(const Expected, CurrentValue: TDateTime; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TObject; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: Variant; const Message: String = ''); overload;
-    class procedure Async(const Proc: TProc; const TimeOut: Integer = 100; const Message: String = '');
+    class procedure Async(const Proc: TProc; const Message: String = '');
     class procedure CheckExpectation(const Expectation: String; const Message: String = '');
     class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = ''); overload;
     class procedure GreaterThan(const Expected, CurrentValue: Double; const Message: String = ''); overload;
@@ -585,12 +547,12 @@ begin
     end);
  end;
 
-class procedure Assert.Async(const Proc: TProc; const TimeOut: Integer; const Message: String);
+class procedure Assert.Async(const Proc: TProc; const Message: String);
 begin
   if not Assigned(Proc) then
     raise EAsyncAssertEmptyProcedure.Create;
 
-  raise EAsyncAssert.Create(Proc, TimeOut);
+  raise EAsyncAssert.Create(Proc);
 end;
 
 class procedure Assert.CheckExpectation(const Expectation, Message: String);
@@ -838,20 +800,6 @@ end;
 
 procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc);
 
-  procedure CheckDelayExecution;
-  var
-    Attribute: TDelayedProcedureAttribute;
-
-  begin
-    if Assigned(Method) then
-    begin
-      Attribute := Method.GetAttribute<TDelayedProcedureAttribute>;
-
-      if Assigned(Attribute) and (Attribute.Delay > 0) then
-        CreateAsyncTimer(ContinueTesting, {$IFDEF PAS2JS}@{$ENDIF}OnTimerDelayProcedure, Attribute.Delay);
-    end;
-  end;
-
   procedure ExecuteSuccess;
   begin
     if Assigned(SuccessProcedure) then
@@ -896,8 +844,6 @@ begin
   except
     CheckException(AcquireExceptionObject);
   end;
-
-  CheckDelayExecution;
 end;
 
 procedure TTestClass.CheckException(ExceptionObject: TObject);
@@ -910,10 +856,31 @@ var
   JSMessage: String absolute ExceptionObject;
 {$ENDIF}
 
+  procedure ExecuteAsyncMethod;
+  begin
+    try
+      FAsyncProcedure := AssertAsync.AssertAsyncProcedure;
+
+      ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
+
+      ContinueTesting;
+    except
+      FTester.ShowException(AcquireExceptionObject);
+    end;
+  end;
+
 begin
   try
     if ExceptionObject is EAsyncAssert then
-      CreateAsyncTimer(AssertAsync.AssertAsyncProcedure, {$IFDEF PAS2JS}@{$ENDIF}OnTimerAssertAsync, AssertAsync.TimeOut)
+{$IFDEF PAS2JS}
+    begin
+      asm
+        Promise.Promise.resolve().then(ExecuteAsyncMethod);
+      end;
+
+      StopExecution;
+    end
+{$ENDIF}
     else if ExceptionObject is EStopExecution then
       StopExecution
     else if ExceptionObject is EAssertFail then
@@ -966,15 +933,6 @@ begin
   FTestTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
 
   LoadSetupAndTearDownMethods;
-end;
-
-procedure TTestClass.CreateAsyncTimer(const AsyncProcedure: TProc; const TimerEvent: TNotifyEvent; const Interval: Integer);
-begin
-  FAsyncProcedure := AsyncProcedure;
-
-  CreateTimer(Interval, TimerEvent);
-
-  StopExecution;
 end;
 
 class function TTestClass.CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
@@ -1096,30 +1054,6 @@ begin
       FTestTearDown := Method;
 end;
 
-procedure TTestClass.OnTimerAssertAsync(Sender: TObject);
-begin
-  FreeTimer(Sender);
-
-  try
-    ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
-
-    ContinueTesting;
-  except
-    FTester.ShowException(AcquireExceptionObject);
-  end;
-end;
-
-procedure TTestClass.OnTimerDelayProcedure(Sender: TObject);
-begin
-  FreeTimer(Sender);
-
-  try
-    ExecutAsyncProcedure;
-  except
-    FTester.ShowException(AcquireExceptionObject);
-  end;
-end;
-
 procedure TTestClass.StartMethodTestExecution(const TestMethod: TTestClassMethod);
 begin
   FTester.StartTestMethodExecution(TestMethod);
@@ -1127,12 +1061,11 @@ end;
 
 { EAsyncAssert }
 
-constructor EAsyncAssert.Create(const AssertAsyncProcedure: TProc; const TimeOut: Integer);
+constructor EAsyncAssert.Create(const AssertAsyncProcedure: TProc);
 begin
   inherited Create('Async Assert');
 
   FAssertAsyncProcedure := AssertAsyncProcedure;
-  FTimeOut := TimeOut;
 end;
 
 { EAsyncAssertEmptyProcedure }
@@ -1150,63 +1083,6 @@ begin
     inherited Create(AssertionMessage)
   else
     inherited CreateFmt('%s, Message: %s', [AssertionMessage, Message]);
-end;
-
-{ TDelayedProcedureAttribute }
-
-constructor TDelayedProcedureAttribute.Create(const Delay: Integer);
-begin
-  inherited Create;
-
-  FDelay := Delay;
-end;
-
-{ SetupDelayAttribute }
-
-constructor SetupDelayAttribute.Create;
-begin
-  Create(10);
-end;
-
-constructor SetupDelayAttribute.Create(const Delay: Integer);
-begin
-  inherited Create(Delay);
-end;
-
-{ SetupFixtureDelayAttribute }
-
-constructor SetupFixtureDelayAttribute.Create;
-begin
-  Create(10);
-end;
-
-constructor SetupFixtureDelayAttribute.Create(const Delay: Integer);
-begin
-  inherited Create(Delay);
-end;
-
-{ TearDownDelayAttribute }
-
-constructor TearDownDelayAttribute.Create;
-begin
-  Create(10);
-end;
-
-constructor TearDownDelayAttribute.Create(const Delay: Integer);
-begin
-  inherited Create(Delay);
-end;
-
-{ TearDownFixtureDelayAttribute }
-
-constructor TearDownFixtureDelayAttribute.Create;
-begin
-  Create(10);
-end;
-
-constructor TearDownFixtureDelayAttribute.Create(const Delay: Integer);
-begin
-  inherited Create(Delay);
 end;
 
 { TObjectProcedure }
