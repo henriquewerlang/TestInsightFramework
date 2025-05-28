@@ -60,12 +60,13 @@ type
     FInstance: TObject;
     FInstanceType: TRttiInstanceType;
     FQueueMethods: TQueue<TObjectProcedure>;
+    FSetupTestClass: TRttiMethod;
+    FTearDownTestClass: TRttiMethod;
     FTester: TTestInsightFramework;
     FTestMethods: TList<TTestClassMethod>;
     FTestSetup: TRttiMethod;
     FTestSetupFixture: TRttiMethod;
     FTestTearDown: TRttiMethod;
-    FTestTearDownTestClass: TRttiMethod;
     FTestTearDownFixture: TRttiMethod;
 
     procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
@@ -100,6 +101,7 @@ type
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
     procedure ExecutAsyncProcedure;{$IFDEF PAS2JS} async;{$ENDIF}
+    procedure ExecuteSetup;{$IFDEF PAS2JS} async;{$ENDIF}
     procedure ExecuteTearDown;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
@@ -759,12 +761,12 @@ procedure TTestClassMethod.Setup;
 begin
   FTestClass.StartMethodTestExecution(Self);
 
-  FTestClass.CallMethod(FTestClass.FTestSetup);
+  FTestClass.CallMethod(FTestClass, FTestClass.FSetupTestClass);
 end;
 
 procedure TTestClassMethod.TearDown;
 begin
-  FTestClass.CallMethod(FTestClass, FTestClass.FTestTearDownTestClass);
+  FTestClass.CallMethod(FTestClass, FTestClass.FTearDownTestClass);
 end;
 
 { TTestClass }
@@ -930,7 +932,8 @@ begin
   RttiType := FTester.Context.GetType(ClassType);
 
   FExecuteAsyncProcedureMethod := RttiType.GetMethod('ExecutAsyncProcedure');
-  FTestTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
+  FSetupTestClass := RttiType.GetMethod('ExecuteSetup');
+  FTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
 
   LoadSetupAndTearDownMethods;
 end;
@@ -980,6 +983,15 @@ begin
       Proc.Free;
     end;
   end;
+end;
+
+procedure TTestClass.ExecuteSetup;
+begin
+{$IFDEF PAS2JS}
+  await(WaitForPromises);
+{$ENDIF}
+
+  CallMethod(FTestSetup);
 end;
 
 procedure TTestClass.ExecuteSetupFixture;
