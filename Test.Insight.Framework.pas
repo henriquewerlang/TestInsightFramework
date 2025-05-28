@@ -137,7 +137,7 @@ type
 
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
-    procedure ExecutAsyncProcedure;
+    procedure ExecutAsyncProcedure;{$IFDEF PAS2JS} async;{$ENDIF}
     procedure ExecuteTearDown;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
@@ -1000,6 +1000,10 @@ end;
 
 procedure TTestClass.ExecutAsyncProcedure;
 begin
+{$IFDEF PAS2JS}
+  await(WaitForPromises);
+{$ENDIF}
+
   FAsyncProcedure();
 end;
 
@@ -1029,9 +1033,9 @@ end;
 
 procedure TTestClass.ExecuteTearDown;
 begin
-  {$IFDEF PAS2JS}
+{$IFDEF PAS2JS}
   await(WaitForPromises);
-  {$ENDIF}
+{$ENDIF}
 
   CallMethod(FTestTearDown);
 end;
