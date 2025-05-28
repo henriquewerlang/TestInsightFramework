@@ -254,18 +254,23 @@ var
   Timer: TTimer;
   WaitingPromise: TJSPromise;
 
-  procedure ResolvePromise;
+  procedure DestroyTimer;
   begin
     TTestClass.FreeTimer(Timer);
+
+    Timer := nil;
+  end;
+
+  procedure ResolvePromise;
+  begin
+    DestroyTimer;
 
     ContinuePromise.Resolve;
   end;
 
   procedure RaiseError;
   begin
-    TTestClass.FreeTimer(Timer);
-
-    raise Exception.Create('Timeout execution!');
+    raise Exception.Create('Execution timeout!');
   end;
 
 {$ENDIF}
@@ -279,11 +284,14 @@ begin
     WaitingPromise = Promise.waitForAll();
   end;
 
-  Timer := TTestClass.CreateTimer(Timeout, TNotifyEvent(@RaiseError));
+  Timer := TTestClass.CreateTimer(Timeout, TNotifyEvent(@ResolvePromise));
 
   await(TJSPromise.Any([WaitingPromise, ContinuePromise.Promise]));
 
-  ResolvePromise;
+  if Assigned(Timer) then
+    ResolvePromise
+  else
+    RaiseError;
 {$ENDIF}
 end;
 
