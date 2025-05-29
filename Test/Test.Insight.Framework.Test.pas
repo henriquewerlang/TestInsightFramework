@@ -107,13 +107,11 @@ type
     [Test]
     procedure WhenAAsyncProcedureHasAnotherAsyncAssertionTheTestMustExecuteAllAssertions;
     [Test]
-    procedure WhenTheUseTheSetupFixtureDelayMustWaitForTheSetupExecution;
-    [Test]
-    procedure WhenTheUseTheSetupDelayMustWaitForTheTestExecution;
-    [Test]
     procedure BeforeExecuteATestMustMarkAsFalseTheAssertionExecution;
     [Test]
     procedure WhenAProcedureDontExecuteAnAssertionMustPostTheExectionWarning;
+    [Test]
+    procedure WhenTheProdureDontExecuteAnAssertionMustPostErrorMessageToUser;
   end;
 
   [TestFixture]
@@ -166,8 +164,6 @@ type
     [Test]
     procedure WhenCallTheAsyncAssertWithANilParamMustRaiseAnError;
     [Test]
-    procedure WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
-    [Test]
     procedure WhenTheValueIsntGreaterThanMustRaiseAnAssertionError;
     [Test]
     procedure WhenTheStringValueIsNotEmptyMustRaiseAssertionError;
@@ -216,7 +212,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 37;
+  TEST_COUNT = 36;
 
 { TAssertTest }
 
@@ -330,18 +326,6 @@ begin
     begin
       Test.Insight.Framework.Assert.Async(nil);
     end, EAsyncAssertEmptyProcedure);
-end;
-
-procedure TAssertTest.WhenCallTheAsyncAssertWithATimeoutValueMustLoadTheValueAsExpected;
-begin
-  try
-    Test.Insight.Framework.Assert.Async(WhenCallTheAsyncAssertMustLoadTheAsyncAssertProcedureWithTheProcedurePassedToTheCaller, 150);
-  except
-    on AsynErro: EAsyncAssert do
-      Assert.AreEqual(150, AsynErro.TimeOut);
-    else
-      raise;
-  end;
 end;
 
 procedure TAssertTest.WhenCheckAnEmptyExpectationCantRaiseAnyError;
@@ -1103,6 +1087,17 @@ begin
   Test.Free;
 end;
 
+procedure TTestInsightFrameworkTest.WhenTheProdureDontExecuteAnAssertionMustPostErrorMessageToUser;
+begin
+  var TestName := 'Test.Insight.Framework.Classes.Test.TClassWithoutAssertionExecution.WithoutAssertion';
+
+  FClient.Tests := [TestName];
+
+  ExecuteTestsAndWait;
+
+  Assert.AreEqual('No assertion was made during the test', FClient.PostedTests[TestName].ExceptionMessage);
+end;
+
 procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;
 begin
   TClassWithSetupError.SetupFixtureRaiseError := True;
@@ -1150,46 +1145,6 @@ begin
   var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual(TResultType.Skipped, TestResult.ResultType);
-end;
-
-procedure TTestInsightFrameworkTest.WhenTheUseTheSetupDelayMustWaitForTheTestExecution;
-begin
-  TClassDelayed.SetupCalled := False;
-  TClassDelayed.TestCalled := False;
-
-  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassDelayed.Test'];
-
-  ExecuteTests;
-
-  Sleep(15);
-
-  Application.ProcessMessages;
-
-  Assert.IsTrue(TClassDelayed.SetupCalled);
-  Assert.IsFalse(TClassDelayed.TestCalled);
-
-  Sleep(15);
-
-  Application.ProcessMessages;
-
-  Assert.IsTrue(TClassDelayed.TestCalled);
-end;
-
-procedure TTestInsightFrameworkTest.WhenTheUseTheSetupFixtureDelayMustWaitForTheSetupExecution;
-begin
-  TClassDelayed.SetupCalled := False;
-  TClassDelayed.SetupFixtureCalled := False;
-
-  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassDelayed.Test'];
-
-  ExecuteTests;
-
-  Assert.IsTrue(TClassDelayed.SetupFixtureCalled);
-  Assert.IsFalse(TClassDelayed.SetupCalled);
-
-  WaitForTimer;
-
-  Assert.IsTrue(TClassDelayed.SetupCalled);
 end;
 
 { TTestInsightClientMock }

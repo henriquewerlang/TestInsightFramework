@@ -68,13 +68,19 @@ type
     FTestSetupFixture: TRttiMethod;
     FTestTearDown: TRttiMethod;
     FTestTearDownFixture: TRttiMethod;
+    FTimer: TTimer;
+    FTimerEvent: TProc;
+
+    function GetTimer: TTimer;
 
     procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CheckException(ExceptionObject: TObject);
     procedure ClassRegisterMethodsFinished;
     procedure ContinueTesting;
+    procedure DoExecuteAsyncProcedure;{$IFDEF PAS2JS} async;{$ENDIF}
     procedure ExecuteSetupFixture;
+    procedure ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
     procedure ExecuteTearDownFixture;
     procedure ExecuteTestMethod(const Instance: TObject; const TestMethod: TRttiMethod);
     procedure FinishClassTestExecution;
@@ -82,11 +88,12 @@ type
     procedure FinishMethodTestExecutionFail(const Message: String);
     procedure FinishMethodTestExecutionPassed;
     procedure LoadSetupAndTearDownMethods;
+    procedure OnTimer(Sender: TObject);
+    procedure PrepareAsyncProcedure(const Proc: TProc; const Interval: NativeInt);
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
 
-    class procedure FreeTimer(const Sender: TObject);
-
     property Instance: TObject read FInstance;
+    property Timer: TTimer read GetTimer;
   public
     constructor Create(const Tester: TTestInsightFramework; const InstanceType: TRttiInstanceType);
 
@@ -98,7 +105,7 @@ type
 
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
-    procedure ExecutAsyncProcedure;{$IFDEF PAS2JS} async;{$ENDIF}
+    procedure ExecuteAsyncProcedure;
     procedure ExecuteSetup;{$IFDEF PAS2JS} async;{$ENDIF}
     procedure ExecuteTearDown;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
@@ -371,7 +378,10 @@ begin
   if Assert.AssertionCalled then
     FTestResult.ResultType := TResultType.Passed
   else
+  begin
+    FTestResult.ExceptionMessage := 'No assertion was made during the test';
     FTestResult.ResultType := TResultType.Warning;
+  end;
 
   FinishTestMethodExecutionPostResult;
 end;
@@ -856,31 +866,10 @@ var
   JSMessage: String absolute ExceptionObject;
 {$ENDIF}
 
-  procedure ExecuteAsyncMethod;{$IFDEF PAS2JS} async;{$ENDIF}
-  begin
-    try
-      await(WaitForPromises);
-
-      FAsyncProcedure := AssertAsync.AssertAsyncProcedure;
-
-      ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
-
-      ContinueTesting;
-    except
-      FTester.ShowException(AcquireExceptionObject);
-    end;
-  end;
-
 begin
   try
     if ExceptionObject is EAsyncAssert then
-{$IFDEF PAS2JS}
-    begin
-      Window.SetTimeOut(@ExecuteAsyncMethod, 1);
-
-      StopExecution;
-    end
-{$ENDIF}
+      PrepareAsyncProcedure(AssertAsync.AssertAsyncProcedure, 1)
     else if ExceptionObject is EStopExecution then
       StopExecution
     else if ExceptionObject is EAssertFail then
@@ -929,7 +918,7 @@ begin
   FTestMethods := TObjectList<TTestClassMethod>.Create;
   RttiType := FTester.Context.GetType(ClassType);
 
-  FExecuteAsyncProcedureMethod := RttiType.GetMethod('ExecutAsyncProcedure');
+  FExecuteAsyncProcedureMethod := RttiType.GetMethod('ExecuteAsyncProcedure');
   FSetupTestClass := RttiType.GetMethod('ExecuteSetup');
   FTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
 
@@ -938,6 +927,8 @@ end;
 
 destructor TTestClass.Destroy;
 begin
+  FTimer.Free;
+
   FInstance.Free;
 
   FQueueMethods.Free;
@@ -947,12 +938,8 @@ begin
   inherited;
 end;
 
-procedure TTestClass.ExecutAsyncProcedure;
+procedure TTestClass.ExecuteAsyncProcedure;
 begin
-{$IFDEF PAS2JS}
-  await(WaitForPromises);
-{$ENDIF}
-
   FAsyncProcedure();
 end;
 
@@ -970,6 +957,21 @@ begin
     finally
       Proc.Free;
     end;
+  end;
+end;
+
+procedure TTestClass.DoExecuteAsyncProcedure;
+begin
+  try
+{$IFDEF PAS2JS}
+    await(WaitForPromises);
+
+{$ENDIF}
+    ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
+
+    ContinueTesting;
+  except
+    FTester.ShowException(AcquireExceptionObject);
   end;
 end;
 
@@ -1008,6 +1010,18 @@ begin
   CallMethod(Instance, TestMethod, FinishMethodTestExecutionPassed);
 end;
 
+procedure TTestClass.ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
+begin
+{$IFDEF PAS2JS}
+  Window.SetTimeOut(Proc, Interval);
+{$ELSE}
+  FTimerEvent := Proc;
+  Timer.Interval := Interval;
+
+  Timer.Enabled := True;
+{$ENDIF}
+end;
+
 procedure TTestClass.FinishClassTestExecution;
 begin
   FTester.FinishTestClassExecution;
@@ -1028,14 +1042,16 @@ begin
   FTester.FinishTestMethodExecutionPassed;
 end;
 
-class procedure TTestClass.FreeTimer(const Sender: TObject);
-var
-  Timer: TTimer absolute Sender;
-
+function TTestClass.GetTimer: TTimer;
 begin
-  Timer.Enabled := False;
+  if not Assigned(FTimer) then
+  begin
+    FTimer := TTimer.Create(nil);
+    FTimer.Enabled := False;
+    FTimer.OnTimer := OnTimer;
+  end;
 
-  Timer.Free;
+  Result := FTimer;
 end;
 
 procedure TTestClass.LoadSetupAndTearDownMethods;
@@ -1052,6 +1068,22 @@ begin
       FTestSetup := Method
     else if Method.HasAttribute<TearDownAttribute> and not Assigned(FTestTearDown) then
       FTestTearDown := Method;
+end;
+
+procedure TTestClass.OnTimer(Sender: TObject);
+begin
+  FTimer.Enabled := False;
+
+  FTimerEvent();
+end;
+
+procedure TTestClass.PrepareAsyncProcedure(const Proc: TProc; const Interval: NativeInt);
+begin
+  FAsyncProcedure := Proc;
+
+  ExecuteTimer({$IFDEF PAS2JS}@{$ENDIF}DoExecuteAsyncProcedure, Interval);
+
+  StopExecution;
 end;
 
 procedure TTestClass.StartMethodTestExecution(const TestMethod: TTestClassMethod);

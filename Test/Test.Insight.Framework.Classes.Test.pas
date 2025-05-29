@@ -160,34 +160,6 @@ type
   end;
 
   [TestFixture]
-  TClassDelayed = class
-  private class var
-    FTearDownCalled: Boolean;
-    FTearDownFixtureCalled: Boolean;
-    FSetupCalled: Boolean;
-    FSetupFixtureCalled: Boolean;
-    FTestCalled: Boolean;
-  public
-    [SetupDelay]
-    procedure Setup;
-    [SetupFixtureDelay]
-    procedure SetupFixture;
-    [TearDownDelay]
-    procedure TearDown;
-    [TearDownFixtureDelay]
-    procedure TearDownFixture;
-
-    [Test]
-    procedure Test;
-
-    class property SetupCalled: Boolean read FSetupCalled write FSetupCalled;
-    class property SetupFixtureCalled: Boolean read FSetupFixtureCalled write FSetupFixtureCalled;
-    class property TearDownCalled: Boolean read FTearDownCalled write FTearDownCalled;
-    class property TearDownFixtureCalled: Boolean read FTearDownFixtureCalled write FTearDownFixtureCalled;
-    class property TestCalled: Boolean read FTestCalled write FTestCalled;
-  end;
-
-  [TestFixture]
   TClassWithoutAssertionExecution = class
   public
     [Test]
@@ -439,33 +411,6 @@ end;
 procedure TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixture;
 begin
   Inc(TearDownFixtureCalled);
-end;
-
-{ TClassDelayed }
-
-procedure TClassDelayed.Setup;
-begin
-  SetupCalled := True;
-end;
-
-procedure TClassDelayed.SetupFixture;
-begin
-  SetupFixtureCalled := True;
-end;
-
-procedure TClassDelayed.TearDown;
-begin
-  TearDownCalled := True;
-end;
-
-procedure TClassDelayed.TearDownFixture;
-begin
-  TearDownFixtureCalled := True;
-end;
-
-procedure TClassDelayed.Test;
-begin
-  TestCalled := True;
 end;
 
 { TClassWithoutAssertionExecution }
