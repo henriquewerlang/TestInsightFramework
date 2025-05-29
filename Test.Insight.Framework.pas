@@ -84,8 +84,6 @@ type
     procedure LoadSetupAndTearDownMethods;
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
 
-    class function CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
-
     class procedure FreeTimer(const Sender: TObject);
 
     property Instance: TObject read FInstance;
@@ -215,14 +213,14 @@ procedure WaitForPromises(const Timeout: Integer);
 {$IFDEF PAS2JS}
 var
   ContinuePromise: TJSPromiseResolvers;
-  Timer: TTimer;
+  Timer: NativeInt;
   WaitingPromise: TJSPromise;
 
   procedure DestroyTimer;
   begin
-    TTestClass.FreeTimer(Timer);
+    Window.ClearTimeout(Timer);
 
-    Timer := nil;
+    Timer := 0;
   end;
 
   procedure ResolvePromise;
@@ -248,14 +246,14 @@ begin
     WaitingPromise = Promise.waitForAll();
   end;
 
-  Timer := TTestClass.CreateTimer(Timeout, TNotifyEvent(@ResolvePromise));
+  Timer := Window.SetTimeOut(@ResolvePromise, Timeout);
 
   await(TJSPromise.Any([WaitingPromise, ContinuePromise.Promise]));
 
-  if Assigned(Timer) then
-    ResolvePromise
+  if Timer = 0 then
+    RaiseError
   else
-    RaiseError;
+    ResolvePromise;
 {$ENDIF}
 end;
 
@@ -858,9 +856,11 @@ var
   JSMessage: String absolute ExceptionObject;
 {$ENDIF}
 
-  procedure ExecuteAsyncMethod;
+  procedure ExecuteAsyncMethod;{$IFDEF PAS2JS} async;{$ENDIF}
   begin
     try
+      await(WaitForPromises);
+
       FAsyncProcedure := AssertAsync.AssertAsyncProcedure;
 
       ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
@@ -876,9 +876,7 @@ begin
     if ExceptionObject is EAsyncAssert then
 {$IFDEF PAS2JS}
     begin
-      asm
-        Promise.Promise.resolve().then(ExecuteAsyncMethod);
-      end;
+      Window.SetTimeOut(@ExecuteAsyncMethod, 1);
 
       StopExecution;
     end
@@ -938,16 +936,6 @@ begin
   LoadSetupAndTearDownMethods;
 end;
 
-class function TTestClass.CreateTimer(const Interval: Integer; const OnTimer: TNotifyEvent): TTimer;
-begin
-  Result := TTimer.Create(nil);
-  Result.Enabled := False;
-  Result.Interval := Interval;
-  Result.OnTimer := OnTimer;
-
-  Result.Enabled := True;
-end;
-
 destructor TTestClass.Destroy;
 begin
   FInstance.Free;
@@ -987,11 +975,11 @@ end;
 
 procedure TTestClass.ExecuteSetup;
 begin
+  CallMethod(FTestSetup);
+
 {$IFDEF PAS2JS}
   await(WaitForPromises);
 {$ENDIF}
-
-  CallMethod(FTestSetup);
 end;
 
 procedure TTestClass.ExecuteSetupFixture;
@@ -1003,11 +991,11 @@ end;
 
 procedure TTestClass.ExecuteTearDown;
 begin
+  CallMethod(FTestTearDown);
+
 {$IFDEF PAS2JS}
   await(WaitForPromises);
 {$ENDIF}
-
-  CallMethod(FTestTearDown);
 end;
 
 procedure TTestClass.ExecuteTearDownFixture;
@@ -1125,7 +1113,7 @@ asm
     static PromiseList = [];
     static Promise = Promise;
 
-    constructor (resolver) {
+    constructor (executor) {
       let MyResolve = null;
       let MyReject = null;
 
@@ -1135,7 +1123,7 @@ asm
           MyReject = reject;
         });
 
-      resolver(
+      executor(
         (value) =>
           {
             this.removeFromList();
