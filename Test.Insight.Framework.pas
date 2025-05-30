@@ -22,10 +22,12 @@ type
   EAsyncAssert = class(Exception)
   private
     FAssertAsyncProcedure: TProc;
+    FInterval: NativeInt;
   public
-    constructor Create(const AssertAsyncProcedure: TProc);
+    constructor Create(const AssertAsyncProcedure: TProc; const Interval: NativeInt);
 
     property AssertAsyncProcedure: TProc read FAssertAsyncProcedure;
+    property Interval: NativeInt read FInterval write FInterval;
   end;
 
   EAsyncAssertEmptyProcedure = class(Exception)
@@ -125,6 +127,8 @@ type
   end;
 
   TTestInsightFramework = class
+  private class var
+    FAsyncDefaultIntervalValue: NativeInt;
   private
     FAutoDestroy: Boolean;
     FContext: TRttiContext;
@@ -163,6 +167,8 @@ type
     class procedure ExecuteTests; overload;
     class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;
 
+    class property AsyncDefaultIntervalValue: NativeInt read FAsyncDefaultIntervalValue write FAsyncDefaultIntervalValue;
+
     property OnTerminate: TProc read FOnTerminate write FOnTerminate;
     property TestCount: Integer read FTestCount;
   end;
@@ -183,7 +189,9 @@ type
     class procedure AreEqual(const Expected, CurrentValue: TDateTime; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: TObject; const Message: String = ''); overload;
     class procedure AreEqual(const Expected, CurrentValue: Variant; const Message: String = ''); overload;
-    class procedure Async(const Proc: TProc; const Message: String = '');
+    class procedure Async(const Proc: TProc); overload;
+    class procedure Async(const Proc: TProc; const Interval: NativeInt); overload;
+    class procedure Async(const Proc: TProc; const Message: String; const Interval: NativeInt); overload;
     class procedure CheckExpectation(const Expectation: String; const Message: String = '');
     class procedure GreaterThan(const Expected, CurrentValue: NativeInt; const Message: String = ''); overload;
     class procedure GreaterThan(const Expected, CurrentValue: Double; const Message: String = ''); overload;
@@ -557,12 +565,22 @@ begin
     end);
  end;
 
-class procedure Assert.Async(const Proc: TProc; const Message: String);
+class procedure Assert.Async(const Proc: TProc; const Message: String; const Interval: NativeInt);
 begin
   if not Assigned(Proc) then
     raise EAsyncAssertEmptyProcedure.Create;
 
-  raise EAsyncAssert.Create(Proc);
+  raise EAsyncAssert.Create(Proc, Interval);
+end;
+
+class procedure Assert.Async(const Proc: TProc; const Interval: NativeInt);
+begin
+  Async(Proc, EmptyStr, Interval);
+end;
+
+class procedure Assert.Async(const Proc: TProc);
+begin
+  Async(Proc, EmptyStr, TTestInsightFramework.AsyncDefaultIntervalValue);
 end;
 
 class procedure Assert.CheckExpectation(const Expectation, Message: String);
@@ -869,7 +887,7 @@ var
 begin
   try
     if ExceptionObject is EAsyncAssert then
-      PrepareAsyncProcedure(AssertAsync.AssertAsyncProcedure, 1)
+      PrepareAsyncProcedure(AssertAsync.AssertAsyncProcedure, AssertAsync.Interval)
     else if ExceptionObject is EStopExecution then
       StopExecution
     else if ExceptionObject is EAssertFail then
@@ -1093,11 +1111,12 @@ end;
 
 { EAsyncAssert }
 
-constructor EAsyncAssert.Create(const AssertAsyncProcedure: TProc);
+constructor EAsyncAssert.Create(const AssertAsyncProcedure: TProc; const Interval: NativeInt);
 begin
   inherited Create('Async Assert');
 
   FAssertAsyncProcedure := AssertAsyncProcedure;
+  FInterval := Interval;
 end;
 
 { EAsyncAssertEmptyProcedure }
