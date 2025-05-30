@@ -75,6 +75,7 @@ type
 
     function GetTimer: TTimer;
 
+    procedure BreakExecutionCycle;{$IFDEF PAS2JS} async;{$ENDIF}
     procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
     procedure CheckException(ExceptionObject: TObject);
@@ -821,6 +822,17 @@ begin
   end;
 end;
 
+procedure TTestClass.BreakExecutionCycle;
+begin
+{$IFDEF PAS2JS}
+  await(WaitForPromises);
+
+  ExecuteTimer(ContinueTesting, TTestInsightFramework.AsyncDefaultIntervalValue);
+
+  StopExecution;
+{$ENDIF}
+end;
+
 procedure TTestClass.CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc);
 begin
   CallMethod(Instance, Method, SuccessProcedure);
@@ -997,9 +1009,7 @@ procedure TTestClass.ExecuteSetup;
 begin
   CallMethod(FTestSetup);
 
-{$IFDEF PAS2JS}
-  await(WaitForPromises);
-{$ENDIF}
+  {$IFDEF PAS2JS}await{$ENDIF}(BreakExecutionCycle);
 end;
 
 procedure TTestClass.ExecuteSetupFixture;
@@ -1013,9 +1023,7 @@ procedure TTestClass.ExecuteTearDown;
 begin
   CallMethod(FTestTearDown);
 
-{$IFDEF PAS2JS}
-  await(WaitForPromises);
-{$ENDIF}
+  {$IFDEF PAS2JS}await{$ENDIF}(BreakExecutionCycle);
 end;
 
 procedure TTestClass.ExecuteTearDownFixture;
