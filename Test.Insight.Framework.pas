@@ -7,6 +7,8 @@ uses System.SysUtils, System.Rtti, System.Generics.Collections, System.Classes, 
 type
 {$IFDEF PAS2JS}
   Variant = JSValue;
+{$ELSE}
+  TJSPromise = TObject;
 {$ENDIF}
 
   SetupAttribute = class(TCustomAttribute);
@@ -58,12 +60,11 @@ type
   TTestClass = class
   private
     FAsyncProcedure: TProc;
+    FCurrentTest: TTestClassMethod;
     FExecuteAsyncProcedureMethod: TRttiMethod;
     FInstance: TObject;
     FInstanceType: TRttiInstanceType;
     FQueueMethods: TQueue<TObjectProcedure>;
-    FSetupTestClass: TRttiMethod;
-    FTearDownTestClass: TRttiMethod;
     FTester: TTestInsightFramework;
     FTestMethods: TList<TTestClassMethod>;
     FTestSetup: TRttiMethod;
@@ -75,24 +76,22 @@ type
 
     function GetTimer: TTimer;
 
-    procedure BreakExecutionCycle;{$IFDEF PAS2JS} async;{$ENDIF}
-    procedure CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
-    procedure CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc = nil); overload;
-    procedure CheckException(ExceptionObject: TObject);
+    procedure CallMethod(const Instance: TObject; const Method: TRttiMethod); overload;
+    procedure CallMethod(const Method: TRttiMethod); overload;
+    procedure CheckException(const ExceptionObject: TObject);
+    procedure CheckForPromises;
     procedure ClassRegisterMethodsFinished;
     procedure ContinueTesting;
-    procedure DoExecuteAsyncProcedure;{$IFDEF PAS2JS} async;{$ENDIF}
+    procedure ExecutePromise(const Promise: TJSPromise);
     procedure ExecuteSetupFixture;
     procedure ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
     procedure ExecuteTearDownFixture;
-    procedure ExecuteTestMethod(const Instance: TObject; const TestMethod: TRttiMethod);
     procedure FinishClassTestExecution;
     procedure FinishMethodTestExecutionError(const Message: String);
     procedure FinishMethodTestExecutionFail(const Message: String);
     procedure FinishMethodTestExecutionPassed;
     procedure LoadSetupAndTearDownMethods;
     procedure OnTimer(Sender: TObject);
-    procedure PrepareAsyncProcedure(const Proc: TProc; const Interval: NativeInt);
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
 
     property Instance: TObject read FInstance;
@@ -109,8 +108,6 @@ type
     property InstanceType: TRttiInstanceType read FInstanceType;
   published
     procedure ExecuteAsyncProcedure;
-    procedure ExecuteSetup;{$IFDEF PAS2JS} async;{$ENDIF}
-    procedure ExecuteTearDown;{$IFDEF PAS2JS} async;{$ENDIF}
   end;
 
   TTestClassMethod = class
@@ -130,6 +127,7 @@ type
   TTestInsightFramework = class
   private class var
     FAsyncDefaultIntervalValue: NativeInt;
+    FWaitForPromisesTimeOut: NativeInt;
   private
     FAutoDestroy: Boolean;
     FContext: TRttiContext;
@@ -169,6 +167,7 @@ type
     class procedure ExecuteTests(const ObjectResolver: TObjectResolver); overload;
 
     class property AsyncDefaultIntervalValue: NativeInt read FAsyncDefaultIntervalValue write FAsyncDefaultIntervalValue;
+    class property WaitForPromisesTimeOut: NativeInt read FWaitForPromisesTimeOut write FWaitForPromisesTimeOut;
 
     property OnTerminate: TProc read FOnTerminate write FOnTerminate;
     property TestCount: Integer read FTestCount;
@@ -209,7 +208,9 @@ type
     class property AssertionCalled: Boolean read FAssertionCalled write FAssertionCalled;
   end;
 
-procedure WaitForPromises(const Timeout: Integer = 5000);{$IFDEF PAS2JS} async;{$ENDIF}
+function IgnorePromise(const Promise: TJSPromise): TJSPromise;
+function WaitForPromises: TJSPromise; overload;
+function WaitForPromises(const Timeout: NativeInt): TJSPromise; overload;
 
 implementation
 
@@ -218,59 +219,74 @@ uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.We
 {$IFDEF PAS2JS}
 var
   AcquireExceptionObject: TObject; external name '$e';
+  GPromises: TList<TJSPromise> = nil;
+  GRealPromise: class of TJSPromise;
+  GKeepChecking: NativeInt;
+
+procedure RemovePromise(const Promise: TJSPromise);
+begin
+  GPromises.Remove(Promise);
+end;
+
+function HasPromises: Boolean;
+begin
+  Result := not GPromises.IsEmpty;
+end;
+
+procedure TryToResolve(Resolver: TProc);
+begin
+  Window.SetTimeout(
+    procedure
+    begin
+      if (GKeepChecking > 0) and not GPromises.IsEmpty then
+        TryToResolve(Resolver)
+      else
+      begin
+        Window.ClearTimeout(GKeepChecking);
+
+        Resolver;
+      end;
+    end, 1);
+end;
+
 {$ENDIF}
+
+function IgnorePromise(const Promise: TJSPromise): TJSPromise;
+begin
+  Result := Promise;
+{$IFDEF PAS2JS}
+
+  RemovePromise(Promise);
+{$ENDIF}
+end;
+
+function WaitForPromises: TJSPromise;
+begin
+  Result := WaitForPromises(TTestInsightFramework.WaitForPromisesTimeOut);
+end;
+
+function WaitForPromises(const Timeout: NativeInt): TJSPromise;
+begin
+{$IFDEF PAS2JS}
+  Result := GRealPromise.New(
+    procedure (Resolve: TProc)
+    begin
+      GKeepChecking := Window.SetTimeout(
+        procedure
+        begin
+          GKeepChecking := 0;
+        end, Timeout);
+
+      TryToResolve(Resolve);
+    end);
+{$ELSE}
+  Result := nil;
+{$ENDIF}
+end;
 
 procedure StopExecution;
 begin
   raise EStopExecution.Create;
-end;
-
-procedure WaitForPromises(const Timeout: Integer);
-{$IFDEF PAS2JS}
-var
-  ContinuePromise: TJSPromiseResolvers;
-  Timer: NativeInt;
-  WaitingPromise: TJSPromise;
-
-  procedure DestroyTimer;
-  begin
-    Window.ClearTimeout(Timer);
-
-    Timer := 0;
-  end;
-
-  procedure ResolvePromise;
-  begin
-    DestroyTimer;
-
-    ContinuePromise.Resolve;
-  end;
-
-  procedure RaiseError;
-  begin
-    raise Exception.Create('Execution timeout!');
-  end;
-
-{$ENDIF}
-begin
-{$IFDEF PAS2JS}
-  asm
-    if (!Promise.hasPromises())
-      return;
-
-    ContinuePromise = Promise.continuePromise();
-    WaitingPromise = Promise.waitForAll();
-  end;
-
-  Timer := Window.SetTimeOut(@ResolvePromise, Timeout);
-
-  await(TJSPromise.Any([WaitingPromise, ContinuePromise.Promise]));
-
-  if Timer = 0 then
-    RaiseError
-  else
-    ResolvePromise;
-{$ENDIF}
 end;
 
 { TTestInsightFramework }
@@ -340,12 +356,10 @@ begin
   FTestResult.ExceptionMessage := EmptyStr;
   FTestResult.FixtureName := TestMethod.FTestClass.InstanceType.DeclaringUnitName;
   FTestResult.LineNumber := 0;
-  FTestResult.MethodName := EmptyStr;
   FTestResult.MethodName := TestMethod.TestMethod.Name;
   FTestResult.Path := TestMethod.FTestClass.InstanceType.QualifiedName;
   FTestResult.ResultType := TResultType.Skipped;
   FTestResult.Status := EmptyStr;
-  FTestResult.TestName := EmptyStr;
   FTestResult.TestName := TestMethod.TestMethod.Name;
   FTestResult.UnitName := TestMethod.FTestClass.InstanceType.DeclaringUnitName;
 end;
@@ -780,20 +794,27 @@ end;
 procedure TTestClassMethod.ExecuteTest;
 begin
   Assert.AssertionCalled := False;
+  FTestClass.FCurrentTest := Self;
 
-  FTestClass.CallMethod(FTestMethod, FTestClass.FinishMethodTestExecutionPassed);
+  FTestClass.CallMethod(FTestMethod);
 end;
 
 procedure TTestClassMethod.Setup;
 begin
   FTestClass.StartMethodTestExecution(Self);
 
-  FTestClass.CallMethod(FTestClass, FTestClass.FSetupTestClass);
+  FTestClass.CallMethod(FTestClass.FTestSetup);
+
+  FTestClass.CheckForPromises;
 end;
 
 procedure TTestClassMethod.TearDown;
 begin
-  FTestClass.CallMethod(FTestClass, FTestClass.FTearDownTestClass);
+  FTestClass.FCurrentTest := nil;
+
+  FTestClass.CallMethod(FTestClass.FTestTearDown);
+
+  FTestClass.CheckForPromises;
 end;
 
 { TTestClass }
@@ -822,71 +843,48 @@ begin
   end;
 end;
 
-procedure TTestClass.BreakExecutionCycle;
+procedure TTestClass.CallMethod(const Method: TRttiMethod);
 begin
-{$IFDEF PAS2JS}
-  await(WaitForPromises);
-
-  ExecuteTimer(ContinueTesting, TTestInsightFramework.AsyncDefaultIntervalValue);
-
-  StopExecution;
-{$ENDIF}
+  CallMethod(Instance, Method);
 end;
 
-procedure TTestClass.CallMethod(const Method: TRttiMethod; const SuccessProcedure: TProc);
-begin
-  CallMethod(Instance, Method, SuccessProcedure);
-end;
+procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMethod);
 
-procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMethod; const SuccessProcedure: TProc);
-
-  procedure ExecuteSuccess;
+  procedure FinishExecution;
   begin
-    if Assigned(SuccessProcedure) then
-      SuccessProcedure;
+    if Assigned(FCurrentTest) then
+      FinishMethodTestExecutionPassed;
   end;
+
+{$IFDEF PAS2JS}
+  procedure RegisterExecution(const Promise: TJSPromise);
+  begin
+    ExecutePromise(Promise
+      .&Then(
+        procedure
+        begin
+          FinishExecution;
+        end));
+  end;
+{$ENDIF}
 
 begin
   try
     if Assigned(Method) then
 {$IFDEF PAS2JS}
       if Method.IsAsyncCall then
-      begin
-        Method.Invoke(Instance, []).AsType<TJSPromise>
-          .&Then(
-            procedure
-            begin
-              ExecuteSuccess;
-            end)
-          .Catch(
-            procedure (Exception: TObject)
-            begin
-              CheckException(Exception);
-            end)
-          .&Then(
-            procedure
-            begin
-              ContinueTesting;
-            end)
-          .Catch(
-            procedure (Exception: TObject)
-            begin
-              FTester.ShowException(Exception);
-            end);
-
-        StopExecution;
-      end
+        RegisterExecution(Method.Invoke(Instance, []).AsType<TJSPromise>)
       else
 {$ENDIF}
       Method.Invoke(Instance, []);
 
-    ExecuteSuccess;
+    FinishExecution;
   except
     CheckException(AcquireExceptionObject);
   end;
 end;
 
-procedure TTestClass.CheckException(ExceptionObject: TObject);
+procedure TTestClass.CheckException(const ExceptionObject: TObject);
 var
   AssertAsync: EAsyncAssert absolute ExceptionObject;
   Error: Exception absolute ExceptionObject;
@@ -899,7 +897,20 @@ var
 begin
   try
     if ExceptionObject is EAsyncAssert then
-      PrepareAsyncProcedure(AssertAsync.AssertAsyncProcedure, AssertAsync.Interval)
+    begin
+      FAsyncProcedure := AssertAsync.AssertAsyncProcedure;
+
+{$IFDEF PAS2JS}
+      ExecutePromise(WaitForPromises(AssertAsync.Interval)
+        .&Then(
+          procedure
+          begin
+            CallMethod(Self, FExecuteAsyncProcedureMethod);
+          end));
+
+{$ENDIF}
+      StopExecution;
+    end
     else if ExceptionObject is EStopExecution then
       StopExecution
     else if ExceptionObject is EAssertFail then
@@ -922,6 +933,18 @@ begin
   end;
 end;
 
+procedure TTestClass.CheckForPromises;
+begin
+{$IFDEF PAS2JS}
+  ExecutePromise(WaitForPromises
+    .&Then(
+      procedure
+      begin
+        GPromises.Clear;
+      end));
+{$ENDIF}
+end;
+
 procedure TTestClass.ClassRegisterMethodsFinished;
 begin
   if not FQueueMethods.IsEmpty then
@@ -932,7 +955,7 @@ end;
 
 procedure TTestClass.ContinueTesting;
 begin
-  FTester.DoExecuteTests;
+  ExecuteTimer(FTester.DoExecuteTests, 1);
 end;
 
 constructor TTestClass.Create(const Tester: TTestInsightFramework; const InstanceType: TRttiInstanceType);
@@ -949,8 +972,6 @@ begin
   RttiType := FTester.Context.GetType(ClassType);
 
   FExecuteAsyncProcedureMethod := RttiType.GetMethod('ExecuteAsyncProcedure');
-  FSetupTestClass := RttiType.GetMethod('ExecuteSetup');
-  FTearDownTestClass := RttiType.GetMethod('ExecuteTearDown');
 
   LoadSetupAndTearDownMethods;
 end;
@@ -973,6 +994,30 @@ begin
   FAsyncProcedure();
 end;
 
+procedure TTestClass.ExecutePromise(const Promise: TJSPromise);
+begin
+{$IFDEF PAS2JS}
+  Promise
+    .Catch(
+      procedure (Exception: TObject)
+      begin
+        CheckException(Exception);
+      end)
+    .&Then(
+      procedure
+      begin
+        ContinueTesting;
+      end)
+    .Catch(
+      procedure (Exception: TObject)
+      begin
+        FTester.ShowException(Exception);
+      end);
+
+  StopExecution;
+{$ENDIF}
+end;
+
 procedure TTestClass.Execute;
 var
   Proc: TObjectProcedure;
@@ -990,28 +1035,6 @@ begin
   end;
 end;
 
-procedure TTestClass.DoExecuteAsyncProcedure;
-begin
-  try
-{$IFDEF PAS2JS}
-    await(WaitForPromises);
-
-{$ENDIF}
-    ExecuteTestMethod(Self, FExecuteAsyncProcedureMethod);
-
-    ContinueTesting;
-  except
-    FTester.ShowException(AcquireExceptionObject);
-  end;
-end;
-
-procedure TTestClass.ExecuteSetup;
-begin
-  CallMethod(FTestSetup);
-
-  {$IFDEF PAS2JS}await{$ENDIF}(BreakExecutionCycle);
-end;
-
 procedure TTestClass.ExecuteSetupFixture;
 begin
   FInstance := FTester.FObjectResolver(InstanceType);
@@ -1019,21 +1042,9 @@ begin
   CallMethod(FTestSetupFixture);
 end;
 
-procedure TTestClass.ExecuteTearDown;
-begin
-  CallMethod(FTestTearDown);
-
-  {$IFDEF PAS2JS}await{$ENDIF}(BreakExecutionCycle);
-end;
-
 procedure TTestClass.ExecuteTearDownFixture;
 begin
   CallMethod(FTestTearDownFixture);
-end;
-
-procedure TTestClass.ExecuteTestMethod(const Instance: TObject; const TestMethod: TRttiMethod);
-begin
-  CallMethod(Instance, TestMethod, FinishMethodTestExecutionPassed);
 end;
 
 procedure TTestClass.ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
@@ -1103,15 +1114,6 @@ begin
   FTimerEvent();
 end;
 
-procedure TTestClass.PrepareAsyncProcedure(const Proc: TProc; const Interval: NativeInt);
-begin
-  FAsyncProcedure := Proc;
-
-  ExecuteTimer({$IFDEF PAS2JS}@{$ENDIF}DoExecuteAsyncProcedure, Interval);
-
-  StopExecution;
-end;
-
 procedure TTestClass.StartMethodTestExecution(const TestMethod: TTestClassMethod);
 begin
   FTester.StartTestMethodExecution(TestMethod);
@@ -1165,13 +1167,12 @@ begin
   inherited Create('Stop the execution.');
 end;
 
-{$IFDEF PAS2JS}
 initialization
+  GPromises := TList<TJSPromise>.Create;
+  GRealPromise := TJSPromise;
+{$IFDEF PAS2JS}
 asm
   class TestInsightPromise extends Promise {
-    static PromiseList = [];
-    static Promise = Promise;
-
     constructor (executor) {
       let MyResolve = null;
       let MyReject = null;
@@ -1182,46 +1183,24 @@ asm
           MyReject = reject;
         });
 
+      let Impl = pas["Test.Insight.Framework"].$impl;
+
+      Impl.GPromises.Add(this);
+
       executor(
         (value) =>
           {
-            this.removeFromList();
+            Impl.RemovePromise(this);
 
             MyResolve(value);
           },
         (value) =>
           {
-            this.removeFromList();
+            Impl.RemovePromise(this);
 
             MyReject(value);
           }
         );
-
-      if (!TestInsightPromise.PromiseList)
-        TestInsightPromise.PromiseList = [];
-
-      TestInsightPromise.PromiseList.push(this);
-    }
-
-    removeFromList()
-    {
-      TestInsightPromise.PromiseList = TestInsightPromise.PromiseList.slice(TestInsightPromise.PromiseList.indexOf(this), 1);
-    }
-
-    static hasPromises()
-    {
-      return TestInsightPromise.PromiseList && TestInsightPromise.PromiseList.length > 0;
-    }
-
-    static async waitForAll()
-    {
-      while (this.hasPromises())
-        await TestInsightPromise.Promise.allSettled(TestInsightPromise.PromiseList);
-    }
-
-    static continuePromise()
-    {
-      return TestInsightPromise.Promise.withResolvers();
     }
   };
 
