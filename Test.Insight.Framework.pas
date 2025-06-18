@@ -81,8 +81,10 @@ type
     procedure CheckException(const ExceptionObject: TObject);
     procedure CheckForPromises;
     procedure ClassRegisterMethodsFinished;
+{$IFDEF PAS2JS}
     procedure ContinueTesting;
     procedure ExecutePromise(const Promise: TJSPromise);
+{$ENDIF}
     procedure ExecuteSetupFixture;
     procedure ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
     procedure ExecuteTearDownFixture;
@@ -903,12 +905,14 @@ begin
 {$IFDEF PAS2JS}
       ExecutePromise(WaitForPromises(AssertAsync.Interval)
         .&Then(
+{$ELSE}
+      ExecuteTimer(
           procedure
           begin
             CallMethod(Self, FExecuteAsyncProcedureMethod);
-          end));
-
+          end{$IFDEF PAS2JS}){$ELSE}, AssertAsync.Interval{$ENDIF});
 {$ENDIF}
+
       StopExecution;
     end
     else if ExceptionObject is EStopExecution then
@@ -953,10 +957,12 @@ begin
   FQueueMethods.Enqueue(TObjectProcedure.Create(FinishClassTestExecution));
 end;
 
+{$IFDEF PAS2JS}
 procedure TTestClass.ContinueTesting;
 begin
   ExecuteTimer(FTester.DoExecuteTests, 1);
 end;
+{$ENDIF}
 
 constructor TTestClass.Create(const Tester: TTestInsightFramework; const InstanceType: TRttiInstanceType);
 var
@@ -994,9 +1000,9 @@ begin
   FAsyncProcedure();
 end;
 
+{$IFDEF PAS2JS}
 procedure TTestClass.ExecutePromise(const Promise: TJSPromise);
 begin
-{$IFDEF PAS2JS}
   Promise
     .Catch(
       procedure (Exception: TObject)
@@ -1015,8 +1021,8 @@ begin
       end);
 
   StopExecution;
-{$ENDIF}
 end;
+{$ENDIF}
 
 procedure TTestClass.Execute;
 var
@@ -1168,9 +1174,10 @@ begin
 end;
 
 initialization
+{$IFDEF PAS2JS}
   GPromises := TList<TJSPromise>.Create;
   GRealPromise := TJSPromise;
-{$IFDEF PAS2JS}
+
 asm
   class TestInsightPromise extends Promise {
     constructor (executor) {
