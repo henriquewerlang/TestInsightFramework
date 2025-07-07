@@ -907,11 +907,11 @@ begin
         .&Then(
 {$ELSE}
       ExecuteTimer(
+{$ENDIF}
           procedure
           begin
             CallMethod(Self, FExecuteAsyncProcedureMethod);
           end{$IFDEF PAS2JS}){$ELSE}, AssertAsync.Interval{$ENDIF});
-{$ENDIF}
 
       StopExecution;
     end
