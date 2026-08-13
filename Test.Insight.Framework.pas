@@ -81,10 +81,8 @@ type
     procedure CheckException(const ExceptionObject: TObject);
     procedure CheckForPromises;
     procedure ClassRegisterMethodsFinished;
-{$IFDEF PAS2JS}
     procedure ContinueTesting;
-    procedure ExecutePromise(const Promise: TJSPromise);
-{$ENDIF}
+    procedure ExecutePromise(const Promise: {$IFDEF PAS2JS}TJSPromise{$ELSE}TProc{$ENDIF}; const Interval: Integer);
     procedure ExecuteSetupFixture;
     procedure ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
     procedure ExecuteTearDownFixture;
@@ -216,7 +214,7 @@ function WaitForPromises(const Timeout: NativeInt): TJSPromise; overload;
 
 implementation
 
-uses System.DateUtils, {$IFDEF DCC}Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.Web{$ENDIF};
+uses System.DateUtils, {$IFDEF DCC}System.Math, Vcl.Forms{$ENDIF}{$IFDEF PAS2JS}BrowserApi.Web{$ENDIF};
 
 {$IFDEF PAS2JS}
 var
@@ -906,7 +904,7 @@ begin
       ExecutePromise(WaitForPromises(AssertAsync.Interval)
         .&Then(
 {$ELSE}
-      ExecuteTimer(
+      ExecutePromise(
 {$ENDIF}
           procedure
           begin
@@ -957,12 +955,10 @@ begin
   FQueueMethods.Enqueue(TObjectProcedure.Create(FinishClassTestExecution));
 end;
 
-{$IFDEF PAS2JS}
 procedure TTestClass.ContinueTesting;
 begin
   ExecuteTimer(FTester.DoExecuteTests, 1);
 end;
-{$ENDIF}
 
 constructor TTestClass.Create(const Tester: TTestInsightFramework; const InstanceType: TRttiInstanceType);
 var
@@ -1000,9 +996,9 @@ begin
   FAsyncProcedure();
 end;
 
-{$IFDEF PAS2JS}
-procedure TTestClass.ExecutePromise(const Promise: TJSPromise);
+procedure TTestClass.ExecutePromise(const Promise: {$IFDEF PAS2JS}TJSPromise{$ELSE}TProc{$ENDIF}; const Interval: Integer);
 begin
+{$IFDEF PAS2JS}
   Promise
     .Catch(
       procedure (Exception: TObject)
@@ -1021,8 +1017,25 @@ begin
       end);
 
   StopExecution;
-end;
+{$ELSE}
+    ExecuteTimer(
+      procedure
+      begin
+        try
+          try
+            Promise();
+          except
+            CheckException(AcquireExceptionObject);
+          end;
+
+          ContinueTesting;
+        except
+//          on Error: Exception do
+//            FTester.ShowException(Error);
+        end;
+      end, Interval);
 {$ENDIF}
+end;
 
 procedure TTestClass.Execute;
 var
@@ -1059,7 +1072,7 @@ begin
   Window.SetTimeOut(Proc, Interval);
 {$ELSE}
   FTimerEvent := Proc;
-  Timer.Interval := Interval;
+  Timer.Interval := Max(Interval, 1);
 
   Timer.Enabled := True;
 {$ENDIF}
