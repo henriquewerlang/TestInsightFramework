@@ -143,7 +143,8 @@ type
     function CreateObject(&Type: TRttiInstanceType): TObject;
 
     procedure DoExecuteTests;
-    procedure FillTestResult(const TestMethod: TTestClassMethod);
+    procedure FillTestResult(const TestClass: TRttiInstanceType); overload;
+    procedure FillTestResult(const TestMethod: TRttiMethod); overload;
     procedure FinishTestClassExecution;
     procedure FinishTestExecution;
     procedure FinishTestMethodExecutionError(Message: String);
@@ -349,19 +350,25 @@ begin
   Test.Run;
 end;
 
-procedure TTestInsightFramework.FillTestResult(const TestMethod: TTestClassMethod);
+procedure TTestInsightFramework.FillTestResult(const TestClass: TRttiInstanceType);
 begin
-  FTestResult.ClassName := TestMethod.FTestClass.InstanceType.Name;
+  FTestResult.ClassName := TestClass.Name;
+  FTestResult.FixtureName := TestClass.DeclaringUnitName;
+  FTestResult.Path := TestClass.QualifiedName;
+  FTestResult.UnitName := TestClass.DeclaringUnitName;
+end;
+
+procedure TTestInsightFramework.FillTestResult(const TestMethod: TRttiMethod);
+begin
+  FillTestResult(TestMethod.Parent.AsInstance);
+
   FTestResult.Duration := 0;
   FTestResult.ExceptionMessage := EmptyStr;
-  FTestResult.FixtureName := TestMethod.FTestClass.InstanceType.DeclaringUnitName;
   FTestResult.LineNumber := 0;
-  FTestResult.MethodName := TestMethod.TestMethod.Name;
-  FTestResult.Path := TestMethod.FTestClass.InstanceType.QualifiedName;
+  FTestResult.MethodName := TestMethod.Name;
   FTestResult.ResultType := TResultType.Skipped;
   FTestResult.Status := EmptyStr;
-  FTestResult.TestName := TestMethod.TestMethod.Name;
-  FTestResult.UnitName := TestMethod.FTestClass.InstanceType.DeclaringUnitName;
+  FTestResult.TestName := TestMethod.Name;
 end;
 
 procedure TTestInsightFramework.FinishTestClassExecution;
@@ -452,7 +459,6 @@ var
   var
     RttiMethod: TRttiMethod;
     RttiType: TRttiType;
-    TestMethod: TTestClassMethod;
     WillExecute: Boolean;
 
   begin
@@ -473,11 +479,11 @@ var
           begin
             WillExecute := CanExecuteTest(RttiMethod.Name);
 
-            TestMethod := TestClass.AddTestMethod(RttiMethod, WillExecute);
+            TestClass.AddTestMethod(RttiMethod, WillExecute);
 
             if not WillExecute then
             begin
-              FillTestResult(TestMethod);
+              FillTestResult(RttiMethod);
 
               PostTestResult;
             end;
@@ -511,7 +517,7 @@ procedure TTestInsightFramework.StartTestMethodExecution(const TestMethod: TTest
 begin
   FTestStartedTime := Now;
 
-  FillTestResult(TestMethod);
+  FillTestResult(TestMethod.TestMethod);
 
   FTestResult.ResultType := TResultType.Running;
 
@@ -824,9 +830,8 @@ var
   TestMethod: TTestClassMethod;
 
 begin
-  TestMethod := TTestClassMethod.Create(Method, Self);
-
-  Result := TestMethod;
+  Result := TTestClassMethod.Create(Method, Self);;
+  TestMethod := Result;
 
   FTestMethods.Add(TestMethod);
 
@@ -1056,6 +1061,8 @@ end;
 
 procedure TTestClass.ExecuteSetupFixture;
 begin
+  FTester.FillTestResult(FInstanceType);
+
   FInstance := FTester.FObjectResolver(InstanceType);
 
   CallMethod(FTestSetupFixture);

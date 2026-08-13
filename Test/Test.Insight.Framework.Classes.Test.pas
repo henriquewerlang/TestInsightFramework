@@ -82,6 +82,15 @@ type
   end;
 
   [TestFixture]
+  TClassWithSetupFixtureError = class
+  public
+    [SetupFixture]
+    procedure SetupFixture;
+    [Test]
+    procedure Test;
+  end;
+
+  [TestFixture]
   TClassInheritedFromAnotherClass = class(TClassWithSetupAndTearDownFixture)
   public
     [SetupFixture]
@@ -428,6 +437,18 @@ end;
 procedure TClassWithoutAssertionExecution.WithoutAssertion;
 begin
   // No assertion
+end;
+
+{ TClassWithSetupFixtureError }
+
+procedure TClassWithSetupFixtureError.SetupFixture;
+begin
+  raise EIgnoreDebugError.Create('SetupFixture Error!');
+end;
+
+procedure TClassWithSetupFixtureError.Test;
+begin
+  Assert.IsTrue(True);
 end;
 
 end.

@@ -112,6 +112,8 @@ type
     procedure WhenAProcedureDontExecuteAnAssertionMustPostTheExectionWarning;
     [Test]
     procedure WhenTheProdureDontExecuteAnAssertionMustPostErrorMessageToUser;
+    [Test]
+    procedure WhenAnSetupFixtureRaiseAnErroMustPostTheCurrentClassInformationAboutTheError;
   end;
 
   [TestFixture]
@@ -212,7 +214,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 36;
+  TEST_COUNT = 37;
 
 { TAssertTest }
 
@@ -932,6 +934,20 @@ begin
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.SetupFixtureCalled, 'Setup fixture');
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownCalled, 'Tear down');
   Assert.AreEqual(1, TClassWithSetupAndTearDownFixtureHighInheritance.TearDownFixtureCalled, 'Tear down fixture');
+end;
+
+procedure TTestInsightFrameworkTest.WhenAnSetupFixtureRaiseAnErroMustPostTheCurrentClassInformationAboutTheError;
+begin
+  FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.Test'];
+  ExecuteTests;
+
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.Test'];
+
+  Assert.AreEqual(TResultType.Error, TestResult.ResultType);
+  Assert.AreEqual('Test.Insight.Framework.Classes.Test', TestResult.UnitName);
+  Assert.AreEqual('TClassWithSetupFixtureError', TestResult.ClassName);
+  Assert.AreEqual('Test', TestResult.MethodName);
+  Assert.AreEqual('Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError', TestResult.Path);
 end;
 
 procedure TTestInsightFrameworkTest.WhenAProcedureDontExecuteAnAssertionMustPostTheExectionWarning;
