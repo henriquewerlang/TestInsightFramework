@@ -456,6 +456,21 @@ begin
       end,
       procedure
       begin
+//        class procedure Async(const Proc: TProc); overload;
+        Test.Insight.Framework.Assert.AssertionCalled := True;
+      end,
+      procedure
+      begin
+//        class procedure Async(const Proc: TProc; const Interval: NativeInt); overload;
+        Test.Insight.Framework.Assert.AssertionCalled := True;
+      end,
+      procedure
+      begin
+//        class procedure Async(const Proc: TProc; const Message: String; const Interval: NativeInt); overload;
+        Test.Insight.Framework.Assert.AssertionCalled := True;
+      end,
+      procedure
+      begin
         Test.Insight.Framework.Assert.CheckExpectation(EmptyStr);
       end,
       procedure
@@ -509,11 +524,6 @@ begin
           begin
             Abort;
           end, EAbort);
-      end,
-      procedure
-      begin
-        // Async assertion
-        Test.Insight.Framework.Assert.AssertionCalled := True;
       end
     ];
 
