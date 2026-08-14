@@ -361,8 +361,6 @@ end;
 
 procedure TTestInsightFramework.FillTestResult(const TestMethod: TRttiMethod);
 begin
-  FillTestResult(TestMethod.Parent.AsInstance);
-
   FTestResult.Duration := 0;
   FTestResult.ExceptionMessage := EmptyStr;
   FTestResult.LineNumber := 0;
@@ -1061,7 +1059,7 @@ end;
 
 procedure TTestClass.ExecuteSetupFixture;
 begin
-  FTester.FillTestResult(FInstanceType);
+  FTester.FillTestResult(InstanceType);
 
   FInstance := FTester.FObjectResolver(InstanceType);
 
