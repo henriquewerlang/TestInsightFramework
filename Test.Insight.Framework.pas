@@ -142,6 +142,8 @@ type
 
     function CreateObject(&Type: TRttiInstanceType): TObject;
 
+    class procedure ShowException(const Error: TObject);
+
     procedure DoExecuteTests;
     procedure FillTestResult(const TestClass: TRttiInstanceType); overload;
     procedure FillTestResult(const TestMethod: TRttiMethod); overload;
@@ -152,7 +154,6 @@ type
     procedure FinishTestMethodExecutionPassed;
     procedure FinishTestMethodExecutionPostResult;
     procedure PostTestResult;
-    procedure ShowException(const Error: TObject);
     procedure StartTestMethodExecution(const TestMethod: TTestClassMethod);
 
     property Context: TRttiContext read FContext;
@@ -503,7 +504,7 @@ begin
   DoExecuteTests;
 end;
 
-procedure TTestInsightFramework.ShowException(const Error: TObject);
+class procedure TTestInsightFramework.ShowException(const Error: TObject);
 begin
   if Error is EStopExecution then
 {$IFDEF DCC}
@@ -1018,7 +1019,7 @@ begin
     .Catch(
       procedure (Exception: TObject)
       begin
-        FTester.ShowException(Exception);
+        TTestInsightFramework.ShowException(Exception);
       end);
 
   StopExecution;
@@ -1035,8 +1036,7 @@ begin
 
           ContinueTesting;
         except
-//          on Error: Exception do
-//            FTester.ShowException(Error);
+          TTestInsightFramework.ShowException(AcquireExceptionObject);
         end;
       end, Interval);
 {$ENDIF}

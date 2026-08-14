@@ -524,8 +524,8 @@ begin
         Test.Insight.Framework.Assert.WillRaise(
           procedure
           begin
-            Abort;
-          end, EAbort);
+            raise EIgnoreDebugError.Create('Ignore');
+          end, EIgnoreDebugError);
       end
     ];
 
