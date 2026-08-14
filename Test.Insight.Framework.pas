@@ -145,8 +145,8 @@ type
     class procedure ShowException(const Error: TObject);
 
     procedure DoExecuteTests;
-    procedure FillTestResult(const TestClass: TRttiInstanceType); overload;
-    procedure FillTestResult(const TestMethod: TRttiMethod); overload;
+    procedure FillTestClassResult(const TestClass: TRttiInstanceType);
+    procedure FillTestMethoResult(const TestMethod: TRttiMethod);
     procedure FinishTestClassExecution;
     procedure FinishTestExecution;
     procedure FinishTestMethodExecutionError(Message: String);
@@ -351,7 +351,7 @@ begin
   Test.Run;
 end;
 
-procedure TTestInsightFramework.FillTestResult(const TestClass: TRttiInstanceType);
+procedure TTestInsightFramework.FillTestClassResult(const TestClass: TRttiInstanceType);
 begin
   FTestResult.ClassName := TestClass.Name;
   FTestResult.FixtureName := TestClass.DeclaringUnitName;
@@ -359,7 +359,7 @@ begin
   FTestResult.UnitName := TestClass.DeclaringUnitName;
 end;
 
-procedure TTestInsightFramework.FillTestResult(const TestMethod: TRttiMethod);
+procedure TTestInsightFramework.FillTestMethoResult(const TestMethod: TRttiMethod);
 begin
   FTestResult.Duration := 0;
   FTestResult.ExceptionMessage := EmptyStr;
@@ -482,7 +482,9 @@ var
 
             if not WillExecute then
             begin
-              FillTestResult(RttiMethod);
+              FillTestClassResult(RttiType.AsInstance);
+
+              FillTestMethoResult(RttiMethod);
 
               PostTestResult;
             end;
@@ -516,7 +518,7 @@ procedure TTestInsightFramework.StartTestMethodExecution(const TestMethod: TTest
 begin
   FTestStartedTime := Now;
 
-  FillTestResult(TestMethod.TestMethod);
+  FillTestMethoResult(TestMethod.TestMethod);
 
   FTestResult.ResultType := TResultType.Running;
 
@@ -1059,16 +1061,28 @@ end;
 
 procedure TTestClass.ExecuteSetupFixture;
 begin
-  FTester.FillTestResult(InstanceType);
+  FTester.FillTestClassResult(InstanceType);
+
+  if Assigned(FTestSetupFixture) then
+    FTester.FillTestMethoResult(FTestSetupFixture);
 
   FInstance := FTester.FObjectResolver(InstanceType);
 
   CallMethod(FTestSetupFixture);
+
+  if Assigned(FTestSetupFixture) then
+    FTester.PostTestResult;
 end;
 
 procedure TTestClass.ExecuteTearDownFixture;
 begin
+  if Assigned(FTestTearDownFixture) then
+    FTester.FillTestMethoResult(FTestTearDownFixture);
+
   CallMethod(FTestTearDownFixture);
+
+  if Assigned(FTestTearDownFixture) then
+    FTester.PostTestResult;
 end;
 
 procedure TTestClass.ExecuteTimer(const Proc: TProc; const Interval: NativeInt);

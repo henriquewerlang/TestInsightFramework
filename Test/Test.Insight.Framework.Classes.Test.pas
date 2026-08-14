@@ -86,6 +86,8 @@ type
   public
     [SetupFixture]
     procedure SetupFixture;
+    [TearDownFixture]
+    procedure TearDownFixture;
     [Test]
     procedure Test;
   end;
@@ -444,6 +446,11 @@ end;
 procedure TClassWithSetupFixtureError.SetupFixture;
 begin
   raise EIgnoreDebugError.Create('SetupFixture Error!');
+end;
+
+procedure TClassWithSetupFixtureError.TearDownFixture;
+begin
+  raise EIgnoreDebugError.Create('TearDown Error!');
 end;
 
 procedure TClassWithSetupFixtureError.Test;

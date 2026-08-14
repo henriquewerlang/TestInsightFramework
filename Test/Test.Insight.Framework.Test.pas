@@ -114,6 +114,14 @@ type
     procedure WhenTheProdureDontExecuteAnAssertionMustPostErrorMessageToUser;
     [Test]
     procedure WhenAnSetupFixtureRaiseAnErroMustPostTheCurrentClassInformationAboutTheError;
+    [Test]
+    procedure WhenTheTestHasASetupFixtureProcedureMustRegisterTheProcedureExecutionInTheTests;
+    [Test]
+    procedure WhenTheSetupFixtureRaiseAnErrorMustRegisterTheTestWithError;
+    [Test]
+    procedure WhenTheTestHasATeraDownFixtureMustRegisterTheProcedureInTheExecutionTestes;
+    [Test]
+    procedure WhenTheTearDownFixtureRaiseAnErrorMustRegisterTheTestWithError;
   end;
 
   [TestFixture]
@@ -214,7 +222,7 @@ implementation
 uses System.Rtti, Vcl.Forms, Test.Insight.Framework.Classes.Test;
 
 const
-  TEST_COUNT = 37;
+  TEST_COUNT = 50;
 
 { TAssertTest }
 
@@ -941,12 +949,12 @@ begin
   FClient.Tests := ['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.Test'];
   ExecuteTests;
 
-  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.Test'];
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.SetupFixture'];
 
   Assert.AreEqual(TResultType.Error, TestResult.ResultType);
   Assert.AreEqual('Test.Insight.Framework.Classes.Test', TestResult.UnitName);
   Assert.AreEqual('TClassWithSetupFixtureError', TestResult.ClassName);
-  Assert.AreEqual('Test', TestResult.MethodName);
+  Assert.AreEqual('SetupFixture', TestResult.MethodName);
   Assert.AreEqual('Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError', TestResult.Path);
 end;
 
@@ -1133,6 +1141,15 @@ begin
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
 
+procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorMustRegisterTheTestWithError;
+begin
+  ExecuteTests;
+
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.SetupFixture'];
+
+  Assert.AreEqual(TResultType.Error, TestResult.ResultType);
+end;
+
 procedure TTestInsightFrameworkTest.WhenTheTearDownFixtureRaiseAnErrorCantStopExecutingTheTest;
 begin
   TClassWithSetupError.TearDownFixtureRaiseError := True;
@@ -1142,6 +1159,15 @@ begin
   Assert.AreEqual(TEST_COUNT, FClient.PostedTests.Count);
 end;
 
+procedure TTestInsightFrameworkTest.WhenTheTearDownFixtureRaiseAnErrorMustRegisterTheTestWithError;
+begin
+  ExecuteTests;
+
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupFixtureError.TearDownFixture'];
+
+  Assert.AreEqual(TResultType.Error, TestResult.ResultType);
+end;
+
 procedure TTestInsightFrameworkTest.WhenTheTestFailMustRegisterTheErrorMessageInTheResult;
 begin
   ExecuteTests;
@@ -1149,6 +1175,20 @@ begin
   var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TMyClassTest.Test2'];
 
   Assert.AreEqual('The value expected is 10 and the current value is 20', TestResult.ExceptionMessage);
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheTestHasASetupFixtureProcedureMustRegisterTheProcedureExecutionInTheTests;
+begin
+  ExecuteTests;
+
+  Assert.IsTrue(FClient.PostedTests.ContainsKey('Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.SetupFixture'));
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheTestHasATeraDownFixtureMustRegisterTheProcedureInTheExecutionTestes;
+begin
+  ExecuteTests;
+
+  Assert.IsTrue(FClient.PostedTests.ContainsKey('Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.TearDownFixture'));
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheTestIsExecutedMustPostTheResultHasSuccess;
