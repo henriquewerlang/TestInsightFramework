@@ -119,6 +119,8 @@ type
     [Test]
     procedure WhenTheSetupFixtureRaiseAnErrorMustRegisterTheTestWithError;
     [Test]
+    procedure WhenTheSetupFixtureExecuteWithoutErrorMustRegisterTheTestHasPassed;
+    [Test]
     procedure WhenTheTestHasATeraDownFixtureMustRegisterTheProcedureInTheExecutionTestes;
     [Test]
     procedure WhenTheTearDownFixtureRaiseAnErrorMustRegisterTheTestWithError;
@@ -1130,6 +1132,15 @@ begin
   ExecuteTestsAndWait;
 
   Assert.AreEqual('No assertion was made during the test', FClient.PostedTests[TestName].ExceptionMessage);
+end;
+
+procedure TTestInsightFrameworkTest.WhenTheSetupFixtureExecuteWithoutErrorMustRegisterTheTestHasPassed;
+begin
+  ExecuteTests;
+
+  var TestResult := FClient.PostedTests['Test.Insight.Framework.Classes.Test.TClassWithSetupAndTearDownFixture.SetupFixture'];
+
+  Assert.AreEqual(TResultType.Passed, TestResult.ResultType);
 end;
 
 procedure TTestInsightFrameworkTest.WhenTheSetupFixtureRaiseAnErrorCantStopExecutingTheTests;

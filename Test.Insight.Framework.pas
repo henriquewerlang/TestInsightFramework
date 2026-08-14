@@ -60,10 +60,10 @@ type
   TTestClass = class
   private
     FAsyncProcedure: TProc;
-    FCurrentTest: TTestClassMethod;
     FExecuteAsyncProcedureMethod: TRttiMethod;
     FInstance: TObject;
     FInstanceType: TRttiInstanceType;
+    FFinishExecutionMethod: TProc;
     FQueueMethods: TQueue<TObjectProcedure>;
     FTester: TTestInsightFramework;
     FTestMethods: TList<TTestClassMethod>;
@@ -87,9 +87,10 @@ type
     procedure ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
     procedure ExecuteTearDownFixture;
     procedure FinishClassTestExecution;
+    procedure FinishTestMethodExecutionCheckPassed;
     procedure FinishMethodTestExecutionError(const Message: String);
     procedure FinishMethodTestExecutionFail(const Message: String);
-    procedure FinishMethodTestExecutionPassed;
+    procedure FinishTestMethodExecutionPassed;
     procedure LoadSetupAndTearDownMethods;
     procedure OnTimer(Sender: TObject);
     procedure StartMethodTestExecution(const TestMethod: TTestClassMethod);
@@ -149,6 +150,7 @@ type
     procedure FillTestMethoResult(const TestMethod: TRttiMethod);
     procedure FinishTestClassExecution;
     procedure FinishTestExecution;
+    procedure FinishTestMethodExecutionCheckPassed;
     procedure FinishTestMethodExecutionError(Message: String);
     procedure FinishTestMethodExecutionFail(Message: String);
     procedure FinishTestMethodExecutionPassed;
@@ -402,17 +404,24 @@ begin
   FinishTestMethodExecutionPostResult;
 end;
 
-procedure TTestInsightFramework.FinishTestMethodExecutionPassed;
+procedure TTestInsightFramework.FinishTestMethodExecutionCheckPassed;
 begin
   if Assert.AssertionCalled then
-    FTestResult.ResultType := TResultType.Passed
+    FinishTestMethodExecutionPassed
   else
   begin
     FTestResult.ExceptionMessage := 'No assertion was made during the test';
     FTestResult.ResultType := TResultType.Warning;
-  end;
 
-  FinishTestMethodExecutionPostResult;
+    FinishTestMethodExecutionPostResult;
+  end;
+end;
+
+procedure TTestInsightFramework.FinishTestMethodExecutionPassed;
+begin
+  FTestResult.ResultType := TResultType.Passed;
+
+  PostTestResult;
 end;
 
 procedure TTestInsightFramework.FinishTestMethodExecutionPostResult;
@@ -801,7 +810,7 @@ end;
 procedure TTestClassMethod.ExecuteTest;
 begin
   Assert.AssertionCalled := False;
-  FTestClass.FCurrentTest := Self;
+  FTestClass.FFinishExecutionMethod := FTestClass.FinishTestMethodExecutionCheckPassed;
 
   FTestClass.CallMethod(FTestMethod);
 end;
@@ -817,7 +826,7 @@ end;
 
 procedure TTestClassMethod.TearDown;
 begin
-  FTestClass.FCurrentTest := nil;
+  FTestClass.FFinishExecutionMethod := nil;
 
   FTestClass.CallMethod(FTestClass.FTestTearDown);
 
@@ -858,8 +867,8 @@ procedure TTestClass.CallMethod(const Instance: TObject; const Method: TRttiMeth
 
   procedure FinishExecution;
   begin
-    if Assigned(FCurrentTest) then
-      FinishMethodTestExecutionPassed;
+    if Assigned(FFinishExecutionMethod) then
+      FFinishExecutionMethod();
   end;
 
 {$IFDEF PAS2JS}
@@ -882,9 +891,11 @@ begin
         RegisterExecution(Method.Invoke(Instance, []).AsType<TJSPromise>)
       else
 {$ENDIF}
+    begin
       Method.Invoke(Instance, []);
 
-    FinishExecution;
+      FinishExecution;
+    end;
   except
     CheckException(AcquireExceptionObject);
   end;
@@ -1062,6 +1073,7 @@ end;
 procedure TTestClass.ExecuteSetupFixture;
 begin
   FTester.FillTestClassResult(InstanceType);
+  FFinishExecutionMethod := FinishTestMethodExecutionPassed;
 
   if Assigned(FTestSetupFixture) then
     FTester.FillTestMethoResult(FTestSetupFixture);
@@ -1069,20 +1081,16 @@ begin
   FInstance := FTester.FObjectResolver(InstanceType);
 
   CallMethod(FTestSetupFixture);
-
-  if Assigned(FTestSetupFixture) then
-    FTester.PostTestResult;
 end;
 
 procedure TTestClass.ExecuteTearDownFixture;
 begin
+  FFinishExecutionMethod := FinishTestMethodExecutionPassed;
+
   if Assigned(FTestTearDownFixture) then
     FTester.FillTestMethoResult(FTestTearDownFixture);
 
   CallMethod(FTestTearDownFixture);
-
-  if Assigned(FTestTearDownFixture) then
-    FTester.PostTestResult;
 end;
 
 procedure TTestClass.ExecuteTimer(const Proc: TProc; const Interval: NativeInt);
@@ -1112,7 +1120,12 @@ begin
   FTester.FinishTestMethodExecutionFail(Message);
 end;
 
-procedure TTestClass.FinishMethodTestExecutionPassed;
+procedure TTestClass.FinishTestMethodExecutionCheckPassed;
+begin
+  FTester.FinishTestMethodExecutionCheckPassed;
+end;
+
+procedure TTestClass.FinishTestMethodExecutionPassed;
 begin
   FTester.FinishTestMethodExecutionPassed;
 end;
